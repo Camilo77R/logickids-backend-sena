@@ -9,6 +9,7 @@ import gruposRoutes from "./routes/grupos.routes.js";
 import estudiantesRoutes from "./routes/estudiantes.routes.js";
 import sesionesRoutes from "./routes/sesiones.routes.js";
 
+import adminRoutes from "./routes/admin.routes.js";
 const app = express();
 
 const allowedOrigins = env.CORS_ORIGIN.split(",").map((o) => o.trim());
@@ -40,6 +41,7 @@ app.use("/api/grupos", gruposRoutes);
 app.use("/api/estudiantes", estudiantesRoutes);
 app.use("/api/sesiones", sesionesRoutes);
 
+app.use("/api/admin", adminRoutes);
 app.use((_req, res) =>
     res.status(404).json({ success: false, message: "Ruta no encontrada" }),
 );
