@@ -4,9 +4,10 @@ import cors from "cors";
 import { env } from "./config/env.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 
-import authRoutes        from "./routes/auth.routes.js";
-import gruposRoutes      from "./routes/grupos.routes.js";
+import authRoutes from "./routes/auth.routes.js";
+import gruposRoutes from "./routes/grupos.routes.js";
 import estudiantesRoutes from "./routes/estudiantes.routes.js";
+import sesionesRoutes from "./routes/sesiones.routes.js";
 
 const app = express();
 
@@ -34,9 +35,10 @@ app.get("/api/health", (_req, res) =>
     }),
 );
 
-app.use("/api/auth",        authRoutes);
-app.use("/api/grupos",      gruposRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/grupos", gruposRoutes);
 app.use("/api/estudiantes", estudiantesRoutes);
+app.use("/api/sesiones", sesionesRoutes);
 
 app.use((_req, res) =>
     res.status(404).json({ success: false, message: "Ruta no encontrada" }),
