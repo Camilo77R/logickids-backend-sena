@@ -30,6 +30,16 @@ export const listar = (usuario_id) =>
       'creado_en',
       'actualizado_en'
     )
+    .select(db.raw(`
+      EXISTS (
+        SELECT 1 FROM estudiante_grupo_historial egh
+        JOIN estudiantes e ON e.id_estudiante = egh.estudiante_id
+        WHERE egh.grupo_id = grupos.id_grupo
+          AND egh.activo = true
+          AND egh.fecha_fin IS NULL
+          AND e.sesion_activa = true
+      ) as sesion_activa
+    `))
     .orderBy('predeterminado', 'desc')
     .orderBy('creado_en', 'asc');
 
