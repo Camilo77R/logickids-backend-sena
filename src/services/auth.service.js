@@ -30,22 +30,12 @@ const resolveRolId = (nombre) =>
     return r.id_rol;
   });
 
-const resolveInstitucionId = async (nombre) => {
-  if (!nombre) return null;
-  let inst = await db('instituciones').where({ nombre }).select('id_institucion').first();
-  if (!inst) {
-    [inst] = await db('instituciones').insert({ nombre }).returning('id_institucion');
-  }
-  return inst.id_institucion;
-};
-
-export const registrar = async ({ nombre, email, contrasena, institucion }) => {
+export const registrar = async ({ nombre, email, contrasena, institucion_id }) => {
   const exists = await db('usuarios').where({ email }).first();
   if (exists) throw new AppError('El email ya está registrado', 409);
 
-  const [rol_id, institucion_id, contrasena_hash] = await Promise.all([
+  const [rol_id, contrasena_hash] = await Promise.all([
     resolveRolId('tutor'),
-    resolveInstitucionId(institucion),
     bcrypt.hash(contrasena, 10),
   ]);
 
@@ -85,8 +75,8 @@ export const obtenerPerfil = (id) =>
 export const actualizarPerfil = async (id, datos) => {
   const updates = {};
   if (datos.nombre) updates.nombre = datos.nombre;
-  if (datos.institucion !== undefined) {
-    updates.institucion_id = await resolveInstitucionId(datos.institucion);
+  if (datos.institucion_id !== undefined) {
+    updates.institucion_id = datos.institucion_id;
   }
   updates.actualizado_en = db.fn.now();
 
