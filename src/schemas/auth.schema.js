@@ -21,10 +21,10 @@ export const registroSchema = z.object({
 
   rol: z.literal('tutor').optional().default('tutor'),
 
-  institucion: z
-    .string()
-    .trim()
-    .max(150, 'El nombre de la institución no puede superar 150 caracteres')
+  institucion_id: z
+    .number()
+    .int('El ID de la institución debe ser un número entero')
+    .positive('El ID de la institución debe ser positivo')
     .optional(),
 });
 
@@ -51,10 +51,10 @@ export const actualizarPerfilSchema = z
       .max(100, 'El nombre no puede superar 100 caracteres')
       .optional(),
 
-    institucion: z
-      .string()
-      .trim()
-      .max(150, 'El nombre de la institución no puede superar 150 caracteres')
+    institucion_id: z
+      .number()
+      .int('El ID de la institución debe ser un número entero')
+      .positive('El ID de la institución debe ser positivo')
       .optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
