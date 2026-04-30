@@ -22,6 +22,13 @@ export const listar = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const listarTodos = async (req, res, next) => {
+  try {
+    const data = await svc.listarTodos(req.user, req.query.grupo_id ? Number(req.query.grupo_id) : undefined);
+    ok(res, data, 'Todos los estudiantes obtenidos correctamente');
+  } catch (e) { next(e); }
+};
+
 export const obtener = async (req, res, next) => {
   try {
     const data = await svc.obtener(Number(req.params.id), req.user);
@@ -47,6 +54,13 @@ export const desactivar = async (req, res, next) => {
   try {
     await svc.desactivar(Number(req.params.id), req.user);
     noContent(res);
+  } catch (e) { next(e); }
+};
+
+export const reactivar = async (req, res, next) => {
+  try {
+    const data = await svc.reactivar(Number(req.params.id), req.user);
+    ok(res, data, 'Estudiante reactivado correctamente');
   } catch (e) { next(e); }
 };
 

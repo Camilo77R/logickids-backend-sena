@@ -68,6 +68,24 @@ export const listar = async (user, grupo_id) => {
   return query;
 };
 
+/** Lista todos los estudiantes (incluyendo inactivos) */
+export const listarTodos = async (user, grupo_id) => {
+  let query = withActiveGroupHistory(
+    db('estudiantes')
+      .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
+  )
+    .join('grupos', 'grupos.id_grupo', 'egh.grupo_id')
+    .select([...STUDENT_FIELDS, 'estados_estudiante.nombre as estado'])
+    .orderBy('estudiantes.nombre');
+
+  if (user.rol !== 'admin') {
+    query = query.where('grupos.usuario_id', user.id);
+  }
+
+  if (grupo_id) query = query.where('egh.grupo_id', grupo_id);
+  return query;
+};
+
 export const obtener = async (id_estudiante, user) => {
   await assertStudentBelongsToUser(id_estudiante, user);
   return baseQuery()
@@ -96,11 +114,11 @@ export const crear = async (user, { grupo_id, nombre, edad, color_avatar }) => {
     })
     .returning('*');
 
-  // Registra en el historial como grupo activo
+  // Registra en el historial como grupo activo con fecha y hora completa
   await db('estudiante_grupo_historial').insert({
     estudiante_id: est.id_estudiante,
     grupo_id,
-    fecha_inicio: db.raw('CURRENT_DATE'),
+    fecha_inicio: db.fn.now(),
     activo: true,
   });
 
@@ -126,6 +144,19 @@ export const desactivar = async (id_estudiante, user) => {
   await db('estudiantes')
     .where({ id_estudiante })
     .update({ estado_id: id_estado_estudiante, sesion_activa: false, actualizado_en: db.fn.now() });
+};
+
+/** Reactiva un estudiante inactivo */
+export const reactivar = async (id_estudiante, user) => {
+  await assertStudentBelongsToUser(id_estudiante, user);
+  const { id_estado_estudiante } = await db('estados_estudiante')
+    .where({ nombre: 'activo' })
+    .select('id_estado_estudiante')
+    .first();
+
+  await db('estudiantes')
+    .where({ id_estudiante })
+    .update({ estado_id: id_estado_estudiante, actualizado_en: db.fn.now() });
 };
 
 export const obtenerQR = async (id_estudiante, user) => {
@@ -164,20 +195,41 @@ export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
   }
 
   await db.transaction(async (trx) => {
-    // Cierra la asignación activa anterior
+    // Cerrar TODOS los registros activos anteriores
     await trx('estudiante_grupo_historial')
       .where({ estudiante_id: id_estudiante, activo: true })
-      .whereNull('fecha_fin')
-      .update({ activo: false, fecha_fin: trx.raw('CURRENT_DATE') });
+      .update({ activo: false, fecha_fin: trx.fn.now() });
 
-    // Crea nueva asignación
+    // Crear nueva asignación (siempre crear uno nuevo para evitar problemas)
     await trx('estudiante_grupo_historial').insert({
       estudiante_id: id_estudiante,
       grupo_id: nuevo_grupo_id,
-      fecha_inicio: trx.raw('CURRENT_DATE'),
+      fecha_inicio: trx.fn.now(),
       activo: true,
     });
   });
 
-  return obtener(id_estudiante, user);
+  // Obtener el estudiante actualizado usando una consulta directa
+  const estudianteActualizado = await db('estudiantes')
+    .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
+    .leftJoin('estudiante_grupo_historial', function() {
+      this.on('estudiante_grupo_historial.estudiante_id', 'estudiantes.id_estudiante')
+        .andOn('estudiante_grupo_historial.activo', db.raw('TRUE'))
+        .andOnNull('estudiante_grupo_historial.fecha_fin');
+    })
+    .leftJoin('grupos', 'grupos.id_grupo', 'estudiante_grupo_historial.grupo_id')
+    .where('estudiantes.id_estudiante', id_estudiante)
+    .select(
+      'estudiantes.id_estudiante as id',
+      'estudiantes.nombre',
+      'estudiantes.edad',
+      'estudiantes.color_avatar',
+      'estudiantes.sesion_activa',
+      'estudiantes.creado_en',
+      'estados_estudiante.nombre as estado',
+      'estudiante_grupo_historial.grupo_id'
+    )
+    .first();
+
+  return estudianteActualizado;
 };

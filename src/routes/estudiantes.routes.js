@@ -22,11 +22,13 @@ router.patch('/sesion/grupo', requireAuth, validate(toggleSesionGrupoSchema), ct
 router.use(requireAuth);
 
 router.get('/',          ctrl.listar);
+router.get('/all',       ctrl.listarTodos);
 router.get('/:id',       ctrl.obtener);
 router.post('/',         validate(crearEstudianteSchema),        ctrl.crear);
 router.put('/:id',       validate(actualizarEstudianteSchema),   ctrl.actualizar);
 router.patch('/:id/grupo', validate(cambiarGrupoEstudianteSchema), ctrl.cambiarGrupo);
 router.delete('/:id',    ctrl.desactivar);
+router.patch('/:id/reactivar', ctrl.reactivar);
 router.get('/:id/qr',    ctrl.obtenerQr);
 router.patch('/:id/sesion', validate(toggleSesionSchema),        ctrl.toggleSesion);
 
