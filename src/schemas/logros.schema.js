@@ -1,4 +1,4 @@
-import { z } from 'zod';
+ import { z } from 'zod';
 
 /** POST /api/logros/desbloquear */
 export const desbloquearLogroSchema = z.object({

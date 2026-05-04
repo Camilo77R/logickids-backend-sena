@@ -9,6 +9,7 @@ const logroFields = [
   'catalogo_logros.nombre as nombre_logro',
   'catalogo_logros.descripcion',
   'catalogo_logros.icono',
+  'catalogo_logros.puntos'
 ];
 
 const resolveCatalogLogroId = async (clave) => {
@@ -27,7 +28,7 @@ const resolveCatalogLogroId = async (clave) => {
 export const listarCatalogo = () =>
   db('catalogo_logros')
     .where({ activo: true })
-    .select('id_catalogo_logro', 'clave', 'nombre', 'descripcion', 'icono')
+    .select('id_catalogo_logro', 'clave', 'nombre', 'descripcion', 'icono', 'puntos')
     .orderBy('nombre', 'asc');
 
 export const listar = async (estudiante_id, user) => {
@@ -46,18 +47,30 @@ export const desbloquear = async (estudiante_id, clave_logro) => {
   const catalogo_logro_id = await resolveCatalogLogroId(clave_logro);
 
   await db('logros')
-    .insert({ estudiante_id, catalogo_logro_id })
-    .onConflict(['estudiante_id', 'catalogo_logro_id'])
+    .insert({ estudiante_id, catalogo_id: catalogo_logro_id })
+    .onConflict(['estudiante_id', 'catalogo_id'])
     .ignore();
 
   return db('logros')
-    .join('catalogo_logros', 'catalogo_logros.id_catalogo_logro', 'logros.catalogo_logro_id')
+    .join('catalogo_logros', 'catalogo_logros.id_catalogo_logro', 'logros.catalogo_id')
     .where({
       'logros.estudiante_id': estudiante_id,
-      'logros.catalogo_logro_id': catalogo_logro_id,
+      'logros.catalogo_id': catalogo_logro_id,
     })
     .select(logroFields)
     .first();
+};
+
+export const obtenerEstudiantesDelTutor = async (tutorId) => {
+  const estudiantes = await db('estudiante')
+    .select(
+      'id_estudiante as id',
+      'nombre',
+      'edad',
+      'color_avatar',
+      'sesion_activa'
+    );
+  return estudiantes;
 };
 
 export const evaluarLogrosSesion = async (

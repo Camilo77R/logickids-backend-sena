@@ -22,12 +22,12 @@ export const listar = async (req, res, next) => {
     const estudianteId = Number(req.params.id);
     const tutorId = req.user.id;
     
-    // Verificar que el estudiante pertenece al tutor
+    // Verificación corregida
     const pertenece = await db('estudiante_grupo_historial')
       .join('grupos', 'estudiante_grupo_historial.grupo_id', 'grupos.id_grupo')
       .where('grupos.usuario_id', tutorId)
       .where('estudiante_grupo_historial.estudiante_id', estudianteId)
-      .whereNull('estudiante_grupo_historial.fecha_fin')
+      .where('estudiante_grupo_historial.activo', true)
       .first();
     
     if (!pertenece) {
@@ -54,4 +54,15 @@ export const desbloquear = async (req, res, next) => {
     const data = await svc.desbloquear(req.estudiante.id, req.body.clave_logro);
     created(res, data, 'Logro desbloqueado correctamente');
   } catch (e) { next(e); }
+};
+
+// Obtener estudiantes del tutor
+export const misEstudiantes = async (req, res, next) => {
+  try {
+    const tutorId = req.user.id;
+    const data = await svc.obtenerEstudiantesDelTutor(tutorId);
+    ok(res, data, 'Estudiantes obtenidos correctamente');
+  } catch (e) {
+    next(e);
+  }
 };
