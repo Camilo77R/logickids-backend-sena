@@ -26,6 +26,11 @@ export const crearEstudianteSchema = z.object({
     .number({ required_error: 'El grupo es obligatorio', invalid_type_error: 'El ID de grupo debe ser un número' })
     .int()
     .positive('El ID de grupo debe ser un número positivo'),
+
+  color_avatar: z
+    .string()
+    .regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, 'El color debe ser un código hexadecimal válido')
+    .optional(),
 });
 
 /** PUT /api/estudiantes/:id — actualizar estudiante */
@@ -42,6 +47,11 @@ export const actualizarEstudianteSchema = z
       .number({ invalid_type_error: 'La edad debe ser un número' })
       .int('La edad debe ser un número entero')
       .positive('La edad debe ser un número positivo')
+      .optional(),
+
+    color_avatar: z
+      .string()
+      .regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, 'El color debe ser un código hexadecimal válido')
       .optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
