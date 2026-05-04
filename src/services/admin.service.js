@@ -1,13 +1,15 @@
 import { db } from '../config/db.js';
 import { AppError } from '../middlewares/errorHandler.js';
-
+import bcrypt from 'bcrypt';
 class AdminService {
   // --- USUARIOS WEB ---
-  async listarUsuarios() {
+  async listarUsuarios(institucion_id) {
     return db('usuarios')
       .join('roles', 'usuarios.rol_id', 'roles.id_rol')
       .join('estados_usuario', 'usuarios.estado_id', 'estados_usuario.id_estado_usuario')
       .leftJoin('instituciones', 'usuarios.institucion_id', 'instituciones.id_institucion')
+      .where('usuarios.institucion_id', institucion_id)
+      .where('roles.nombre', 'tutor')
       .select(
         'usuarios.id_usuario as id', 'usuarios.nombre', 'usuarios.email', 'usuarios.creado_en',
         'roles.nombre as rol',
@@ -69,21 +71,43 @@ class AdminService {
   }
 
   async crearInstitucion({ nombre, ciudad, direccion, telefono }) {
-    const exists = await db('instituciones').where({ nombre }).first();
-    if (exists) throw new AppError('Ya existe una institución con ese nombre', 409);
+  const exists = await db('instituciones').where({ nombre }).first();
+  if (exists) throw new AppError('Ya existe una institución con ese nombre', 409);
 
-    const [inst] = await db('instituciones')
+  return db.transaction(async (trx) => {
+    const [inst] = await trx('instituciones')
       .insert({ nombre, ciudad, direccion, telefono })
       .returning('*');
+
+    const rol = await trx('roles').where({ nombre: 'admin' }).select('id_rol').first();
+    const contrasena_temp = 'Admin1234!';
+    const contrasena_hash = await bcrypt.hash(contrasena_temp, 10);
+    const emailAdmin = `admin.${nombre.toLowerCase().replace(/\s+/g, '')}@logickids.dev`;
+
+    const [usuario] = await trx('usuarios')
+      .insert({
+        nombre: `Admin ${nombre}`,
+        email: emailAdmin,
+        contrasena_hash,
+        rol_id: rol.id_rol,
+        institucion_id: inst.id_institucion,
+        estado_id: 1,
+      })
+      .returning('*');
+
     return {
-      id: inst.id_institucion,
-      nombre: inst.nombre,
-      ciudad: inst.ciudad,
-      direccion: inst.direccion,
-      telefono: inst.telefono,
-      creado_en: inst.creado_en,
+      institucion: {
+        id: inst.id_institucion,
+        nombre: inst.nombre,
+        ciudad: inst.ciudad,
+      },
+      admin: {
+        email: usuario.email,
+        contrasena_temporal: contrasena_temp,
+      },
     };
-  }
+  });
+}
 
   async eliminarInstitucion(id_institucion) {
     const conUsuarios = await db('usuarios').where({ institucion_id: id_institucion }).first();
