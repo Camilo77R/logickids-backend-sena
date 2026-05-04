@@ -200,16 +200,19 @@ export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
       .where({ estudiante_id: id_estudiante, activo: true })
       .update({ activo: false, fecha_fin: trx.fn.now() });
 
-    // Crear nueva asignación (siempre crear uno nuevo para evitar problemas)
-    await trx('estudiante_grupo_historial').insert({
-      estudiante_id: id_estudiante,
-      grupo_id: nuevo_grupo_id,
-      fecha_inicio: trx.fn.now(),
-      activo: true,
-    });
+    // UPSERT: Si existe registro HOY, actualizar; si no, insertar
+    await trx('estudiante_grupo_historial')
+      .insert({
+        estudiante_id: id_estudiante,
+        grupo_id: nuevo_grupo_id,
+        fecha_inicio: trx.fn.now(),
+        activo: true,
+      })
+      .onConflict(['estudiante_id', 'grupo_id', 'fecha_inicio'])
+      .merge({ activo: true, fecha_fin: null });
   });
 
-  // Obtener el estudiante actualizado usando una consulta directa
+  // Obtener el estudiante actualizado
   const estudianteActualizado = await db('estudiantes')
     .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
     .leftJoin('estudiante_grupo_historial', function() {
