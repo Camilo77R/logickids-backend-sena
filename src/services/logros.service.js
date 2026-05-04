@@ -4,7 +4,7 @@ import { assertStudentBelongsToUser } from './access.service.js';
 
 const logroFields = [
   'logros.id_logro as id',
-  'logros.desbloqueado_en',
+  'logros.fecha_obtencion as desbloqueado_en',
   'catalogo_logros.clave as clave_logro',
   'catalogo_logros.nombre as nombre_logro',
   'catalogo_logros.descripcion',
@@ -37,10 +37,10 @@ export const listar = async (estudiante_id, user) => {
 
 export const listarPorEstudiante = (estudiante_id) =>
   db('logros')
-    .join('catalogo_logros', 'catalogo_logros.id_catalogo_logro', 'logros.catalogo_logro_id')
+    .join('catalogo_logros', 'catalogo_logros.id_catalogo_logro', 'logros.catalogo_id')
     .where('logros.estudiante_id', estudiante_id)
     .select(logroFields)
-    .orderBy('logros.desbloqueado_en', 'desc');
+    .orderBy('logros.fecha_obtencion', 'desc');
 
 export const desbloquear = async (estudiante_id, clave_logro) => {
   const catalogo_logro_id = await resolveCatalogLogroId(clave_logro);

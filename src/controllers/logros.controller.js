@@ -1,6 +1,7 @@
 import * as svc from '../services/logros.service.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import { ok, created } from '../utils/response.js';
+import { db } from '../config/db.js';
 
 export const catalogo = async (_req, res, next) => {
   try {
@@ -18,9 +19,29 @@ export const misLogros = async (req, res, next) => {
 
 export const listar = async (req, res, next) => {
   try {
-    const data = await svc.listar(Number(req.params.id), req.user);
+    const estudianteId = Number(req.params.id);
+    const tutorId = req.user.id;
+    
+    // Verificar que el estudiante pertenece al tutor
+    const pertenece = await db('estudiante_grupo_historial')
+      .join('grupos', 'estudiante_grupo_historial.grupo_id', 'grupos.id_grupo')
+      .where('grupos.usuario_id', tutorId)
+      .where('estudiante_grupo_historial.estudiante_id', estudianteId)
+      .whereNull('estudiante_grupo_historial.fecha_fin')
+      .first();
+    
+    if (!pertenece) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'No tienes permisos para ver los logros de este estudiante' 
+      });
+    }
+    
+    const data = await svc.listarPorEstudiante(estudianteId);
     ok(res, data, 'Logros del estudiante obtenidos correctamente');
-  } catch (e) { next(e); }
+  } catch (e) { 
+    next(e); 
+  }
 };
 
 export const desbloquear = async (req, res, next) => {
