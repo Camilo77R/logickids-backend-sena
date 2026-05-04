@@ -3,7 +3,7 @@ import { ok, created } from '../utils/response.js';
 
 export const listarUsuarios = async (req, res, next) => {
   try {
-    const data = await adminService.listarUsuarios();
+    const data = await adminService.listarUsuarios(req.user.institucion_id);
     ok(res, data, 'Usuarios obtenidos correctamente');
   } catch (error) { next(error); }
 };

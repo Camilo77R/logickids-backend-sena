@@ -64,6 +64,7 @@ export const login = async ({ email, contrasena }) => {
     nombre: user.nombre,
     email: user.email,
     rol: user.rol,
+    institucion_id: user.institucion_id ?? null,
   });
 
   return { token, usuario: userData };
@@ -74,10 +75,7 @@ export const obtenerPerfil = (id) =>
 
 export const actualizarPerfil = async (id, datos) => {
   const updates = {};
-  if (datos.nombre) updates.nombre = datos.nombre;
-  if (datos.institucion_id !== undefined) {
-    updates.institucion_id = datos.institucion_id;
-  }
+  if (datos.nombre) updates.nombre = datos.nombre
   updates.actualizado_en = db.fn.now();
 
   await db('usuarios').where({ id_usuario: id }).update(updates);
