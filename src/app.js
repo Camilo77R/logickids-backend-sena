@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import { env } from "./config/env.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger.js";
 
 import authRoutes from "./routes/auth.routes.js";
 import gruposRoutes from "./routes/grupos.routes.js";
@@ -24,6 +26,11 @@ app.use(
 );
 
 app.use(express.json());
+
+if (env.NODE_ENV !== "production") {
+    app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
+    app.get("/docs.json", (_req, res) => res.json(swaggerSpec));
+}
 
 app.get("/api/health", (_req, res) =>
     res.json({
