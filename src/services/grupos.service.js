@@ -66,9 +66,9 @@ export const obtener = async (id_grupo, usuario_id) => {
   return { ...toGroupDto(grupo), estudiantes };
 };
 
-export const crear = (usuario_id, { nombre, descripcion, predeterminado }) =>
+export const crear = (usuario_id, institucion_id, { nombre, descripcion, predeterminado }) =>
   db('grupos')
-    .insert({ usuario_id, nombre, descripcion, predeterminado: predeterminado ?? false })
+    .insert({ usuario_id, institucion_id, nombre, descripcion, predeterminado: predeterminado ?? false })
     .returning('*')
     .then(([g]) => toGroupDto(g));
 
