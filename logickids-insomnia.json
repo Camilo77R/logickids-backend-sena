@@ -1,0 +1,650 @@
+{
+  "info": {
+    "name": "LogicKids API v2",
+    "_postman_id": "logickids-v2",
+    "description": "Colección completa de endpoints para LogicKids Backend v2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000/api" },
+    { "key": "token_tutor", "value": "" },
+    { "key": "token_estudiante", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "🔐 AUTH",
+      "item": [
+        {
+          "name": "GET instituciones (público)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/auth/instituciones"
+          }
+        },
+        {
+          "name": "POST registro tutor",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/registro",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Tutor Demo\",\n  \"email\": \"tutor@demo.edu\",\n  \"contrasena\": \"Demo12345!\",\n  \"institucion_id\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "POST login superadmin ⭐",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@logickids.dev\",\n  \"contrasena\": \"SuperAdmin2025!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "POST login tutor",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tutor@demo.edu\",\n  \"contrasena\": \"Demo12345!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET perfil tutor",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/auth/perfil",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PUT actualizar perfil",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/auth/perfil",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Tutor Actualizado\"\n}"
+            }
+          }
+        },
+        {
+          "name": "PUT cambiar contraseña",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/auth/cambiar-contrasena",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contrasena_actual\": \"Demo12345!\",\n  \"contrasena_nueva\": \"NuevaClave99!\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🛡️ ADMIN",
+      "item": [
+        {
+          "name": "GET usuarios (admin)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/usuarios",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET usuario por ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/usuarios/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PATCH cambiar estado tutor",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/admin/usuarios/1/estado",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"activo\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET instituciones (superadmin)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/instituciones",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "POST crear institución (superadmin)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/admin/instituciones",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Colegio San Marcos\",\n  \"ciudad\": \"Bogotá\",\n  \"direccion\": \"Calle 10 #5-20\",\n  \"telefono\": \"3001234567\"\n}"
+            }
+          }
+        },
+        {
+          "name": "DELETE eliminar institución (superadmin)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/admin/instituciones/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET minijuegos (superadmin)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/minijuegos",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PATCH toggle minijuego (superadmin)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/admin/minijuegos/1/toggle",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activo\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👥 GRUPOS",
+      "item": [
+        {
+          "name": "GET mis grupos",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/grupos",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "POST crear grupo",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/grupos",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Grupo A\",\n  \"descripcion\": \"Primer grado mañana\",\n  \"predeterminado\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "GET detalle grupo",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/grupos/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PUT editar grupo",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/grupos/1",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Grupo A Editado\",\n  \"descripcion\": \"Nueva descripción\"\n}"
+            }
+          }
+        },
+        {
+          "name": "DELETE eliminar grupo",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/grupos/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PATCH abrir/cerrar clase del grupo",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/grupos/1/sesion",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sesion_activa\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👦 ESTUDIANTES",
+      "item": [
+        {
+          "name": "POST login estudiante por QR",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/estudiantes/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"qr_token\": \"QR-ABC123-DEF456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET mi perfil (estudiante)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estudiantes/mi-perfil",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_estudiante}}" }]
+          }
+        },
+        {
+          "name": "GET listar estudiantes activos",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estudiantes",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET listar estudiantes activos por grupo",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estudiantes?grupo_id=1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET listar todos (incluye inactivos)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estudiantes/all",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "POST crear estudiante",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/estudiantes",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grupo_id\": 1,\n  \"nombre\": \"Juanito Pérez\",\n  \"edad\": 8,\n  \"color_avatar\": \"#F59E0B\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET detalle estudiante",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estudiantes/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PUT editar estudiante",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/estudiantes/1",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Juan Pérez\",\n  \"edad\": 9,\n  \"color_avatar\": \"#3B82F6\"\n}"
+            }
+          }
+        },
+        {
+          "name": "DELETE desactivar estudiante",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/estudiantes/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PATCH reactivar estudiante",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/estudiantes/1/reactivar",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET QR del estudiante",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estudiantes/1/qr",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PATCH cambiar de grupo",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/estudiantes/1/grupo",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nuevo_grupo_id\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "PATCH sesión individual estudiante",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/estudiantes/1/sesion",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sesion_activa\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎮 SESIONES DE JUEGO",
+      "item": [
+        {
+          "name": "POST iniciar partida (estudiante)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/sesiones/iniciar",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_estudiante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minijuego_id\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "POST registrar evento",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/sesiones/1/eventos",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_estudiante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo_evento\": \"acierto\",\n  \"habilidad\": \"Lógica\",\n  \"tiempo_reaccion_ms\": 820,\n  \"puntos\": 100,\n  \"combo_en_evento\": 3\n}"
+            }
+          }
+        },
+        {
+          "name": "POST finalizar partida",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/sesiones/1/finalizar",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_estudiante}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"puntaje\": 1200,\n  \"aciertos\": 8,\n  \"errores\": 2,\n  \"combo_maximo\": 5,\n  \"dificultad\": 2,\n  \"estado\": \"completado\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GET mis sesiones (estudiante)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/sesiones/mis-sesiones",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_estudiante}}" }]
+          }
+        },
+        {
+          "name": "GET historial de estudiante (tutor)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/sesiones/estudiante/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET detalle eventos de sesión",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/sesiones/1/eventos",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 ESTADÍSTICAS",
+      "item": [
+        {
+          "name": "GET mis estadísticas (estudiante)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estadisticas/mis-estadisticas",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_estudiante}}" }]
+          }
+        },
+        {
+          "name": "GET estadísticas de estudiante (tutor)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estadisticas/estudiante/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET estadísticas del grupo",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/estadisticas/grupo/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏆 LOGROS",
+      "item": [
+        {
+          "name": "GET catálogo de logros (público)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/logros/catalogo"
+          }
+        },
+        {
+          "name": "GET catálogo con estado del estudiante",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/logros/catalogo?estudiante_id=1"
+          }
+        },
+        {
+          "name": "GET mis logros (estudiante)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/logros/mis-logros",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_estudiante}}" }]
+          }
+        },
+        {
+          "name": "GET logros de estudiante (tutor)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/logros/estudiante/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "🤖 RECOMENDACIONES IA",
+      "item": [
+        {
+          "name": "POST generar para estudiante",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/recomendaciones/generar/estudiante/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "POST generar para grupo",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/recomendaciones/generar/grupo/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET historial estudiante",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/recomendaciones/estudiante/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET historial grupo",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/recomendaciones/grupo/1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PATCH archivar recomendación",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/recomendaciones/1/archivar",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "🕹️ MINIJUEGOS",
+      "item": [
+        {
+          "name": "GET listar minijuegos (público)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/minijuegos"
+          }
+        },
+        {
+          "name": "GET detalle minijuego",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/minijuegos/1"
+          }
+        },
+        {
+          "name": "POST crear minijuego (superadmin)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/minijuegos",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"memoria-colores\",\n  \"titulo\": \"Memoria de Colores\",\n  \"descripcion\": \"Memoriza la secuencia de colores\",\n  \"habilidad_id\": 2,\n  \"dificultad_maxima\": 4\n}"
+            }
+          }
+        },
+        {
+          "name": "PATCH toggle estado minijuego (superadmin)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/minijuegos/1/estado",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activo\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "❤️ HEALTH CHECK",
+      "item": [
+        {
+          "name": "GET health",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health"
+          }
+        }
+      ]
+    }
+  ]
+}

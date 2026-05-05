@@ -10,15 +10,16 @@ const router = Router();
 router.get('/',    ctrl.listar);
 router.get('/:id', ctrl.obtener);
 
-// Rutas de administración
+// Rutas de administración — solo el superadmin gestiona el catálogo global de minijuegos
+// Un admin de institución no puede crear ni desactivar minijuegos porque son recursos globales
 router.post('/',
-  requireAuth, requireRole('admin'),
+  requireAuth, requireRole('superadmin'),
   validate(crearMinijuegoSchema),
   ctrl.crear,
 );
 
 router.patch('/:id/estado',
-  requireAuth, requireRole('admin'),
+  requireAuth, requireRole('superadmin'),
   validate(toggleActivoSchema),
   ctrl.toggleActivo,
 );
