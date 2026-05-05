@@ -163,6 +163,7 @@ export const crear = async (user, { grupo_id, nombre, edad, color_avatar }) => {
       qr_token,
       sesion_activa: false,
       estado_id: 1,
+      institucion_id: user.institucion_id ?? null,
     })
     .returning('*');
 
