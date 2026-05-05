@@ -3,9 +3,12 @@ import { AppError } from '../middlewares/errorHandler.js';
 import { ok, created } from '../utils/response.js';
 import { db } from '../config/db.js';
 
-export const catalogo = async (_req, res, next) => {
+export const catalogo = async (req, res, next) => {
   try {
-    const data = await svc.listarCatalogo();
+    // Permite marcar logros como desbloqueados si se pasa ?estudiante_id=
+    // o si el que consulta es un estudiante autenticado (HU-25)
+    const estudiante_id = req.estudiante?.id ?? (req.query.estudiante_id ? Number(req.query.estudiante_id) : null);
+    const data = await svc.listarCatalogo(estudiante_id);
     ok(res, data, 'Catálogo de logros obtenido correctamente');
   } catch (e) { next(e); }
 };

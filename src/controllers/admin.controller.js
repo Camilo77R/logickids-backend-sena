@@ -1,9 +1,9 @@
-import adminService from '../services/admin.service.js';
+import * as adminService from '../services/admin.service.js';
 import { ok, created } from '../utils/response.js';
 
 export const listarUsuarios = async (req, res, next) => {
   try {
-    const data = await adminService.listarUsuarios();
+    const data = await adminService.listarUsuarios(req.user.institucion_id);
     ok(res, data, 'Usuarios obtenidos correctamente');
   } catch (error) { next(error); }
 };
@@ -17,7 +17,8 @@ export const obtenerUsuario = async (req, res, next) => {
 
 export const cambiarEstadoUsuario = async (req, res, next) => {
   try {
-    const data = await adminService.cambiarEstadoUsuario(req.params.id, req.body.estado);
+    // Se pasa req.user para validar el scope de institución
+    const data = await adminService.cambiarEstadoUsuario(req.params.id, req.body.estado, req.user);
     ok(res, data, 'Estado del usuario actualizado correctamente');
   } catch (error) { next(error); }
 };

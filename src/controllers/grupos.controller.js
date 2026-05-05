@@ -19,7 +19,7 @@ export const obtener = async (req, res, next) => {
 
 export const crear = async (req, res, next) => {
   try {
-    const data = await svc.crear(req.user.id, req.body);
+    const data = await svc.crear(req.user.id, req.user.institucion_id, req.body);
     created(res, data, 'Grupo creado correctamente');
   } catch (e) { next(e); }
 };

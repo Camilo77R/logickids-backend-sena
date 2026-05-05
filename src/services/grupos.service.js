@@ -1,12 +1,6 @@
 import { db } from '../config/db.js';
 import { AppError } from '../middlewares/errorHandler.js';
-
-/** Verifica que el grupo existe y pertenece al tutor autenticado */
-const ownedByUser = async (id_grupo, usuario_id) => {
-  const g = await db('grupos').where({ id_grupo, usuario_id }).first();
-  if (!g) throw new AppError('Grupo no encontrado', 404);
-  return g;
-};
+import { assertGroupBelongsToUser } from './access.service.js';
 
 const toGroupDto = (grupo) => ({
   id: grupo.id_grupo,
@@ -44,10 +38,10 @@ export const listar = (usuario_id) =>
     .orderBy('creado_en', 'asc');
 
 export const obtener = async (id_grupo, usuario_id) => {
-  const grupo = await ownedByUser(id_grupo, usuario_id);
+  // Reutiliza assertGroupBelongsToUser — no duplicamos la lógica de ownership
+  const grupo = await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
 
-  // Obtiene estudiantes activos del grupo via historial
-  const estudiantes = await db('estudiantes')
+  const estudiantesRaw = await db('estudiantes')
     .join('estudiante_grupo_historial as egh', function () {
       this.on('egh.estudiante_id', 'estudiantes.id_estudiante')
         .andOn('egh.activo', db.raw('TRUE'))
@@ -63,17 +57,19 @@ export const obtener = async (id_grupo, usuario_id) => {
       'estudiantes.sesion_activa'
     );
 
-  return { ...toGroupDto(grupo), estudiantes };
+  // Obtener info completa del grupo para el DTO
+  const grupoCompleto = await db('grupos').where({ id_grupo }).first();
+  return { ...toGroupDto(grupoCompleto), estudiantes: estudiantesRaw };
 };
 
-export const crear = (usuario_id, { nombre, descripcion, predeterminado }) =>
+export const crear = (usuario_id, institucion_id, { nombre, descripcion, predeterminado }) =>
   db('grupos')
-    .insert({ usuario_id, nombre, descripcion, predeterminado: predeterminado ?? false })
+    .insert({ usuario_id, institucion_id, nombre, descripcion, predeterminado: predeterminado ?? false })
     .returning('*')
     .then(([g]) => toGroupDto(g));
 
 export const actualizar = async (id_grupo, usuario_id, datos) => {
-  await ownedByUser(id_grupo, usuario_id);
+  await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
   const allowed = ['nombre', 'descripcion', 'predeterminado'];
   const updates = Object.fromEntries(Object.entries(datos).filter(([k]) => allowed.includes(k)));
   updates.actualizado_en = db.fn.now();
@@ -82,21 +78,38 @@ export const actualizar = async (id_grupo, usuario_id, datos) => {
 };
 
 export const eliminar = async (id_grupo, usuario_id) => {
-  await ownedByUser(id_grupo, usuario_id);
+  await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
+
+  // HU-12: no se puede eliminar si tiene estudiantes activos
+  const conEstudiantes = await db('estudiante_grupo_historial')
+    .where({ grupo_id: id_grupo, activo: true })
+    .whereNull('fecha_fin')
+    .first();
+
+  if (conEstudiantes) {
+    throw new AppError('No se puede eliminar: el grupo tiene estudiantes activos. Desásignalos primero.', 409);
+  }
+
   await db('grupos').where({ id_grupo }).delete();
 };
 
 /** Abre o cierra la sesión para todos los estudiantes activos del grupo */
 export const toggleSesion = async (id_grupo, usuario_id, sesion_activa) => {
-  await ownedByUser(id_grupo, usuario_id);
+  await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
 
-  // Obtiene IDs de estudiantes activos en el grupo
   const rows = await db('estudiante_grupo_historial')
     .where({ grupo_id: id_grupo, activo: true })
     .whereNull('fecha_fin')
     .select('estudiante_id');
 
   const ids = rows.map((r) => r.estudiante_id);
+
+  // HU-13: si no hay estudiantes activos y se intenta ABRIR la clase, informar al tutor
+  if (!ids.length && sesion_activa) {
+    throw new AppError('No hay estudiantes activos en este grupo. Agrega estudiantes antes de abrir la clase.', 422);
+  }
+
+  // Si se intenta CERRAR y no hay nadie activo, simplemente no hay nada que hacer
   if (!ids.length) return { actualizados: 0, sesion_activa };
 
   await db('estudiantes')
@@ -105,3 +118,4 @@ export const toggleSesion = async (id_grupo, usuario_id, sesion_activa) => {
 
   return { actualizados: ids.length, sesion_activa };
 };
+
