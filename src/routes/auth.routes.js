@@ -11,6 +11,9 @@ import {
 
 const router = Router();
 
+// Endpoint público — necesario para el formulario de registro del tutor (HU-03)
+router.get('/instituciones', ctrl.instituciones);
+
 router.post('/registro', validate(registroSchema), ctrl.registro);
 router.post('/login',    validate(loginSchema),    ctrl.login);
 

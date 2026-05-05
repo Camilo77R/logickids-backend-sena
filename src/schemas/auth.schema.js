@@ -69,6 +69,6 @@ export const cambiarContrasenaSchema = z.object({
 
   contrasena_nueva: z
     .string({ required_error: 'La nueva contraseña es obligatoria' })
-    .min(6, 'La nueva contraseña debe tener al menos 6 caracteres')
+    .min(8, 'La nueva contraseña debe tener al menos 8 caracteres')
     .max(128, 'La nueva contraseña no puede superar 128 caracteres'),
 });
