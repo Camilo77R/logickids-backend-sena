@@ -24,11 +24,30 @@ const resolveCatalogLogroId = async (clave) => {
   return logro.id_catalogo_logro;
 };
 
-export const listarCatalogo = () =>
-  db('catalogo_logros')
+/**
+ * Catálogo de logros activos.
+ * Si se pasa estudiante_id, cada logro incluye campo `desbloqueado: boolean`
+ * para que la UI pueda distinguir visualmente los obtenidos de los pendientes (HU-25).
+ */
+export const listarCatalogo = async (estudiante_id = null) => {
+  const catalogo = await db('catalogo_logros')
     .where({ activo: true })
     .select('id_catalogo_logro', 'clave', 'nombre', 'descripcion', 'icono')
     .orderBy('nombre', 'asc');
+
+  if (!estudiante_id) return catalogo;
+
+  const desbloqueados = await db('logros')
+    .where({ estudiante_id })
+    .select('catalogo_logro_id');
+
+  const desbloqueadosSet = new Set(desbloqueados.map((l) => l.catalogo_logro_id));
+
+  return catalogo.map((logro) => ({
+    ...logro,
+    desbloqueado: desbloqueadosSet.has(logro.id_catalogo_logro),
+  }));
+};
 
 export const listar = async (estudiante_id, user) => {
   await assertStudentBelongsToUser(estudiante_id, user);

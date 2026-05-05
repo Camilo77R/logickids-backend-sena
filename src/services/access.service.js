@@ -17,8 +17,18 @@ export const withActiveGroupHistory = (
       .andOnNull(`${alias}.fecha_fin`);
   });
 
+/**
+ * Aplica filtro de ownership según rol:
+ * - tutor: filtra por usuario_id (solo sus propios grupos)
+ * - admin: filtra por institucion_id (todos los grupos de su institución)
+ * - superadmin: sin filtro (acceso global)
+ */
 const applyOwnershipFilter = (query, user, ownerColumn = 'grupos.usuario_id') => {
-  if (user?.rol !== 'admin') {
+  if (user?.rol === 'admin') {
+    if (user.institucion_id) {
+      query.where('grupos.institucion_id', user.institucion_id);
+    }
+  } else if (user?.rol !== 'superadmin') {
     query.where(ownerColumn, user.id);
   }
 

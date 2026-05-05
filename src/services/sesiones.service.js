@@ -107,10 +107,10 @@ export const registrarEvento = async (sesion_id, estudiante_id, { tipo_evento, h
  * Finaliza una sesión guardando el resumen y actualizando estadísticas del estudiante.
  */
 export const finalizar = async (sesion_id, estudiante_id, { puntaje, aciertos, errores, combo_maximo, dificultad, estado = 'completado' }) => {
-  const sesion = await db('sesiones_juego')
+  const sesionExistente = await db('sesiones_juego')
     .where({ id_sesion_juego: sesion_id, estudiante_id })
     .first();
-  if (!sesion) throw new AppError('Sesión no encontrada', 404);
+  if (!sesionExistente) throw new AppError('Sesión no encontrada', 404);
 
   const estado_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', estado);
 
@@ -126,15 +126,20 @@ export const finalizar = async (sesion_id, estudiante_id, { puntaje, aciertos, e
 
   await db('sesiones_juego').where({ id_sesion_juego: sesion_id }).update(updateData);
   await actualizarStats(estudiante_id, sesion_id);
-  await evaluarLogrosSesion(estudiante_id, {
+
+  // Evalúa y desbloquea logros — se incluyen en la respuesta para
+  // que la app móvil los muestre en la pantalla de resultados (HU-44, HU-50)
+  const logros_desbloqueados = await evaluarLogrosSesion(estudiante_id, {
     aciertos: updateData.aciertos,
     errores: updateData.errores,
     combo_maximo: updateData.combo_maximo,
     estado,
   });
 
-  return db('sesiones_juego').where({ id_sesion_juego: sesion_id }).first();
+  const sesion = await db('sesiones_juego').where({ id_sesion_juego: sesion_id }).first();
+  return { ...sesion, logros_desbloqueados };
 };
+
 
 /**
  * Historial de sesiones de un estudiante para el dashboard del tutor.
