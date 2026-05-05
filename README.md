@@ -182,6 +182,7 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 | PATCH | `/api/estudiantes/:id/reactivar` | JWT Tutor | Reactiva estudiante inactivo |
 | GET | `/api/estudiantes/:id/qr` | JWT Tutor | Obtiene el QR token para imprimir |
 | PATCH | `/api/estudiantes/:id/grupo` | JWT Tutor | Traslada a otro grupo (guarda historial con fecha_fin) |
+| PATCH | `/api/estudiantes/:id/sesion` | JWT Tutor | Abre o cierra la sesion de un estudiante individual |
 
 **POST /api/estudiantes**
 ```json
@@ -212,6 +213,7 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 | POST | `/api/sesiones/iniciar` | JWT Estudiante | Inicia partida (verifica clase abierta, calcula dificultad IA) |
 | POST | `/api/sesiones/:id/finalizar` | JWT Estudiante | Finaliza partida, actualiza stats y evalua logros |
 | POST | `/api/sesiones/:id/eventos` | JWT Estudiante | Registra evento individual (acierto, error, combo) |
+| GET | `/api/sesiones/mis-sesiones` | JWT Estudiante | Historial de partidas del estudiante autenticado |
 | GET | `/api/sesiones/estudiante/:id` | JWT Tutor | Historial de partidas de un estudiante |
 | GET | `/api/sesiones/:id/eventos` | JWT Tutor | Detalle evento a evento de una partida |
 
@@ -311,6 +313,7 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 | POST | `/api/recomendaciones/generar/grupo/:id` | JWT Tutor | Genera recomendacion consolidada para el grupo |
 | GET | `/api/recomendaciones/estudiante/:id` | JWT Tutor | Historial de recomendaciones del estudiante |
 | GET | `/api/recomendaciones/grupo/:id` | JWT Tutor | Historial de recomendaciones del grupo |
+| PATCH | `/api/recomendaciones/:id/archivar` | JWT Tutor | Archiva (desactiva) una recomendacion para ocultarla del dashboard |
 
 **POST /api/recomendaciones/generar/estudiante/:id**
 ```json
