@@ -103,9 +103,9 @@ export const listarInstituciones = () =>
           '(SELECT id_estado_usuario FROM estados_usuario WHERE nombre = ?)', ['activo']
         ));
     })
-    .leftJoin('roles as r', 'r.id_rol', 'u.rol_id')
-    .where(function () {
-      this.where('r.nombre', 'tutor').orWhereNull('r.nombre');
+    .leftJoin('roles as r', function () {
+      this.on('r.id_rol', 'u.rol_id')
+        .andOnVal('r.nombre', '=', 'tutor');
     })
     .groupBy('instituciones.id_institucion')
     .select(
@@ -115,7 +115,7 @@ export const listarInstituciones = () =>
       'instituciones.direccion',
       'instituciones.telefono',
       'instituciones.creado_en',
-      db.raw('COUNT(u.id_usuario) as tutores_activos')
+      db.raw('COUNT(r.id_rol) as tutores_activos')
     )
     .orderBy('instituciones.nombre', 'asc');
 
