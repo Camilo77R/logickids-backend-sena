@@ -42,3 +42,34 @@ export const toggleMinijuegoSchema = z.object({
     invalid_type_error: 'El campo activo debe ser true o false',
   }),
 });
+
+/** PUT /api/admin/instituciones/:id — actualizar datos de una institución (superadmin) */
+export const actualizarInstitucionSchema = z.object({
+  nombre: z
+    .string()
+    .trim()
+    .min(2, 'El nombre debe tener al menos 2 caracteres')
+    .max(150, 'El nombre no puede superar 150 caracteres')
+    .optional(),
+
+  ciudad: z
+    .string()
+    .trim()
+    .max(100, 'La ciudad no puede superar 100 caracteres')
+    .optional(),
+
+  direccion: z
+    .string()
+    .trim()
+    .max(200, 'La dirección no puede superar 200 caracteres')
+    .optional(),
+
+  telefono: z
+    .string()
+    .trim()
+    .max(30, 'El teléfono no puede superar 30 caracteres')
+    .optional(),
+}).refine(
+  (data) => Object.values(data).some((v) => v !== undefined),
+  { message: 'Debes enviar al menos un campo para actualizar' }
+);

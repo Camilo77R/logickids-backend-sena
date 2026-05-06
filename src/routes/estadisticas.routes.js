@@ -5,7 +5,8 @@ import { requireAuth, requireEstudiante, requireRole } from '../middlewares/auth
 const router = Router();
 router.get('/mis-estadisticas', requireEstudiante, ctrl.misEstadisticas);
 router.use(requireAuth);
-router.use(requireRole('tutor'));
+// Admin ve estadísticas de su institución, tutor solo las suyas — el scope lo aplica access.service.js
+router.use(requireRole('tutor', 'admin'));
 router.get('/estudiante/:id', ctrl.porEstudiante);
 router.get('/grupo/:id', ctrl.porGrupo);
 

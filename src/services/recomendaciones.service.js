@@ -266,6 +266,10 @@ export const archivar = async (id_recomendacion, user) => {
     await assertStudentBelongsToUser(recommendation.estudiante_id, user);
   } else if (recommendation.grupo_id) {
     await assertGroupBelongsToUser(recommendation.grupo_id, user);
+  } else {
+    // Caso defensivo: nunca debería ocurrir por la lógica de generación,
+    // pero si ocurre, bloqueamos el acceso para evitar un bypass silencioso.
+    throw new AppError('Recomendación con destino inválido (sin estudiante ni grupo)', 500);
   }
 
   await db('recomendaciones')

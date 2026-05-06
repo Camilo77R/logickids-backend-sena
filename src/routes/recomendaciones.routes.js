@@ -4,7 +4,8 @@ import { requireAuth, requireRole } from '../middlewares/auth.js';
 
 const router = Router();
 router.use(requireAuth);
-router.use(requireRole('tutor'));
+// Admin puede ver y generar recomendaciones de su institución — scope garantizado por access.service.js
+router.use(requireRole('tutor', 'admin'));
 
 router.get('/estudiante/:id', ctrl.porEstudiante);
 router.get('/grupo/:id', ctrl.porGrupo);

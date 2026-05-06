@@ -174,6 +174,47 @@ export const eliminarInstitucion = async (id_institucion) => {
   });
 };
 
+/**
+ * Actualiza los datos de una institución existente.
+ * Solo el superadmin puede ejecutar esta operación.
+ * Usa un allowlist de campos para evitar ataques de mass-assignment.
+ *
+ * @param {number} id_institucion - ID de la institución a modificar
+ * @param {object} datos - Campos permitidos: nombre, ciudad, direccion, telefono
+ * @returns {object} Institución actualizada
+ */
+export const actualizarInstitucion = async (id_institucion, datos) => {
+  // Allowlist: solo campos permitidos llegan a la BD
+  const CAMPOS_PERMITIDOS = ['nombre', 'ciudad', 'direccion', 'telefono'];
+  const updates = Object.fromEntries(
+    Object.entries(datos).filter(([k]) => CAMPOS_PERMITIDOS.includes(k))
+  );
+
+  if (!Object.keys(updates).length) {
+    throw new AppError('No se proporcionaron campos válidos para actualizar', 400);
+  }
+
+  // Verifica que la institución exista antes de modificarla
+  const existente = await db('instituciones').where({ id_institucion }).first();
+  if (!existente) throw new AppError('Institución no encontrada', 404);
+
+  // Previene conflicto de nombre duplicado con OTRA institución
+  if (updates.nombre && updates.nombre !== existente.nombre) {
+    const duplicado = await db('instituciones')
+      .where({ nombre: updates.nombre })
+      .whereNot({ id_institucion })
+      .first();
+    if (duplicado) throw new AppError('Ya existe una institución con ese nombre', 409);
+  }
+
+  const [actualizada] = await db('instituciones')
+    .where({ id_institucion })
+    .update(updates)
+    .returning(['id_institucion as id', 'nombre', 'ciudad', 'direccion', 'telefono', 'creado_en']);
+
+  return actualizada;
+};
+
 // --- MINIJUEGOS ---
 
 export const listarMinijuegosAdmin = () =>

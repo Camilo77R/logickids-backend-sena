@@ -44,6 +44,13 @@ export const eliminarInstitucion = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+export const actualizarInstitucion = async (req, res, next) => {
+  try {
+    const data = await adminService.actualizarInstitucion(Number(req.params.id), req.body);
+    ok(res, data, 'Institución actualizada correctamente');
+  } catch (error) { next(error); }
+};
+
 export const listarMinijuegos = async (req, res, next) => {
   try {
     const data = await adminService.listarMinijuegosAdmin();
