@@ -24,8 +24,7 @@ export const registroSchema = z.object({
   institucion_id: z
     .number()
     .int('El ID de la institución debe ser un número entero')
-    .positive('El ID de la institución debe ser positivo')
-    .optional(),
+    .positive('El ID de la institución debe ser positivo'),
 });
 
 /** POST /api/auth/login */
@@ -49,12 +48,6 @@ export const actualizarPerfilSchema = z
       .trim()
       .min(2, 'El nombre debe tener al menos 2 caracteres')
       .max(100, 'El nombre no puede superar 100 caracteres')
-      .optional(),
-
-    institucion_id: z
-      .number()
-      .int('El ID de la institución debe ser un número entero')
-      .positive('El ID de la institución debe ser positivo')
       .optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

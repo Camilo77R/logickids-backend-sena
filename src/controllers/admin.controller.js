@@ -10,7 +10,7 @@ export const listarUsuarios = async (req, res, next) => {
 
 export const obtenerUsuario = async (req, res, next) => {
   try {
-    const data = await adminService.obtenerUsuario(Number(req.params.id));
+    const data = await adminService.obtenerUsuario(Number(req.params.id), req.user);
     ok(res, data, 'Usuario obtenido correctamente');
   } catch (error) { next(error); }
 };

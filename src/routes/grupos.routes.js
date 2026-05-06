@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/grupos.controller.js';
-import { requireAuth } from '../middlewares/auth.js';
+import { requireAuth, requireRole } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import {
   crearGrupoSchema,
@@ -11,6 +11,7 @@ import {
 const router = Router();
 
 router.use(requireAuth);
+router.use(requireRole('tutor'));
 
 router.get('/',     ctrl.listar);
 router.get('/:id',  ctrl.obtener);

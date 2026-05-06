@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/estudiantes.controller.js';
-import { requireAuth, requireEstudiante } from '../middlewares/auth.js';
+import { requireAuth, requireEstudiante, requireRole } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import {
   loginEstudianteSchema,
@@ -18,6 +18,7 @@ router.get('/mi-perfil',      requireEstudiante,                 ctrl.miPerfil);
 
 // Rutas protegidas
 router.use(requireAuth);
+router.use(requireRole('tutor'));
 
 router.get('/',          ctrl.listar);
 router.get('/all',       ctrl.listarTodos);

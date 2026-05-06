@@ -3,6 +3,7 @@ import { db } from '../config/db.js';
 import { env } from '../config/env.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import {
+  applyGroupAccessScope,
   assertGroupBelongsToUser,
   assertStudentBelongsToUser,
   getActiveStudentIdsByGroup,
@@ -85,9 +86,7 @@ export const listar = async (user, grupo_id) => {
     .select(STUDENT_FIELDS)
     .orderBy('estudiantes.nombre');
 
-  if (user.rol !== 'admin') {
-    query = query.where('grupos.usuario_id', user.id);
-  }
+  query = applyGroupAccessScope(query, user);
 
   if (grupo_id) query = query.where('egh.grupo_id', grupo_id);
   return query;
@@ -109,9 +108,7 @@ export const listarTodos = async (user, grupo_id) => {
     .select([...STUDENT_FIELDS, 'estados_estudiante.nombre as estado'])
     .orderBy('estudiantes.nombre');
 
-  if (user.rol !== 'admin') {
-    query = query.where('grupos.usuario_id', user.id);
-  }
+  query = applyGroupAccessScope(query, user);
 
   if (grupo_id) query = query.where('egh.grupo_id', grupo_id);
   return query;

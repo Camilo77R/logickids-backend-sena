@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/recomendaciones.controller.js';
-import { requireAuth } from '../middlewares/auth.js';
+import { requireAuth, requireRole } from '../middlewares/auth.js';
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireRole('tutor'));
 
 router.get('/estudiante/:id', ctrl.porEstudiante);
 router.get('/grupo/:id', ctrl.porGrupo);

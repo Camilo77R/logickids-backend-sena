@@ -8,6 +8,7 @@ const USER_FIELDS = [
   'usuarios.id_usuario',
   'usuarios.nombre',
   'usuarios.email',
+  'usuarios.institucion_id',
   'usuarios.creado_en',
   'roles.nombre as rol',
   'estados_usuario.nombre as estado',
@@ -30,20 +31,40 @@ const resolveRolId = (nombre) =>
     return r.id_rol;
   });
 
+const resolveEstadoUsuarioId = (nombre) =>
+  db('estados_usuario').where({ nombre }).select('id_estado_usuario').first().then((r) => {
+    if (!r) throw new AppError(`Estado '${nombre}' no existe`, 400);
+    return r.id_estado_usuario;
+  });
+
+const assertInstitutionExists = async (institucion_id) => {
+  const institution = await db('instituciones')
+    .where({ id_institucion: institucion_id })
+    .select('id_institucion')
+    .first();
+
+  if (!institution) {
+    throw new AppError('La institución seleccionada no existe', 404);
+  }
+};
+
 export const registrar = async ({ nombre, email, contrasena, institucion_id }) => {
   const exists = await db('usuarios').where({ email }).first();
   if (exists) throw new AppError('El email ya está registrado', 409);
 
-  const [rol_id, contrasena_hash] = await Promise.all([
+  await assertInstitutionExists(institucion_id);
+
+  const [rol_id, estado_id, contrasena_hash] = await Promise.all([
     resolveRolId('tutor'),
+    resolveEstadoUsuarioId('inactivo'),
     bcrypt.hash(contrasena, 10),
   ]);
 
   const [{ id_usuario }] = await db('usuarios')
-    .insert({ nombre, email, contrasena_hash, rol_id, institucion_id, estado_id: 1 })
+    .insert({ nombre, email, contrasena_hash, rol_id, institucion_id, estado_id })
     .returning('id_usuario');
 
-  return { id_usuario, nombre, email, rol: 'tutor' };
+  return { id_usuario, nombre, email, rol: 'tutor', estado: 'inactivo' };
 };
 
 export const login = async ({ email, contrasena }) => {

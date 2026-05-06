@@ -23,7 +23,7 @@ export const listarUsuarios = (institucion_id) =>
     )
     .orderBy('usuarios.creado_en', 'desc');
 
-export const obtenerUsuario = async (id_usuario) => {
+export const obtenerUsuario = async (id_usuario, admin) => {
   const user = await db('usuarios')
     .join('roles', 'usuarios.rol_id', 'roles.id_rol')
     .join('estados_usuario', 'usuarios.estado_id', 'estados_usuario.id_estado_usuario')
@@ -33,6 +33,7 @@ export const obtenerUsuario = async (id_usuario) => {
       'usuarios.id_usuario as id',
       'usuarios.nombre',
       'usuarios.email',
+      'usuarios.institucion_id',
       'usuarios.creado_en',
       'usuarios.actualizado_en',
       'roles.nombre as rol',
@@ -43,6 +44,17 @@ export const obtenerUsuario = async (id_usuario) => {
     .first();
 
   if (!user) throw new AppError('Usuario no encontrado', 404);
+
+  if (admin.rol === 'admin') {
+    if (user.institucion_id !== admin.institucion_id) {
+      throw new AppError('No tienes permisos para ver usuarios de otra institución', 403);
+    }
+
+    if (user.rol !== 'tutor') {
+      throw new AppError('El admin solo puede consultar tutores', 403);
+    }
+  }
+
   return user;
 };
 
@@ -149,15 +161,14 @@ export const crearInstitucion = async ({ nombre, ciudad, direccion, telefono }) 
 };
 
 export const eliminarInstitucion = async (id_institucion) => {
-  const rolTutor = await db('roles').where({ nombre: 'tutor' }).select('id_rol').first();
-
-  const conTutores = await db('usuarios')
-    .where({ institucion_id: id_institucion, rol_id: rolTutor.id_rol })
+  const conUsuarios = await db('usuarios')
+    .where({ institucion_id: id_institucion })
     .first();
-  if (conTutores) throw new AppError('No se puede eliminar: tiene tutores asociados', 409);
+  if (conUsuarios) {
+    throw new AppError('No se puede eliminar: tiene usuarios asociados', 409);
+  }
 
   return db.transaction(async (trx) => {
-    await trx('usuarios').where({ institucion_id: id_institucion }).delete();
     const deleted = await trx('instituciones').where({ id_institucion }).delete();
     if (!deleted) throw new AppError('Institución no encontrada', 404);
   });
