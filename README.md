@@ -102,7 +102,8 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 | PATCH | `/api/admin/usuarios/:id/estado` | admin | Activa o desactiva un tutor |
 | GET | `/api/admin/instituciones` | superadmin | Lista todas las instituciones con conteo de tutores activos |
 | POST | `/api/admin/instituciones` | superadmin | Crea institucion + admin automatico en transaccion atomica |
-| DELETE | `/api/admin/instituciones/:id` | superadmin | Elimina institucion (solo si no tiene tutores) |
+| PUT | `/api/admin/instituciones/:id` | superadmin | Actualiza datos de una institucion (nombre, ciudad, direccion, telefono) |
+| DELETE | `/api/admin/instituciones/:id` | superadmin | Elimina institucion (solo si no tiene usuarios asociados) |
 | GET | `/api/admin/minijuegos` | superadmin | Lista todos los minijuegos |
 | PATCH | `/api/admin/minijuegos/:id/toggle` | superadmin | Activa o desactiva un minijuego globalmente |
 
@@ -284,11 +285,13 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 
 ### ESTADISTICAS - /api/estadisticas
 
+> Requiere JWT de tutor **o admin**. El admin solo ve datos de su institucion, el tutor solo los suyos. El scope lo aplica automaticamente access.service.js.
+
 | Metodo | Ruta | Auth | Descripcion |
 |---|---|---|---|
 | GET | `/api/estadisticas/mis-estadisticas` | JWT Estudiante | Precision y velocidad por habilidad del propio estudiante |
-| GET | `/api/estadisticas/estudiante/:id` | JWT Tutor | Estadisticas de un estudiante especifico |
-| GET | `/api/estadisticas/grupo/:id` | JWT Tutor | Promedios consolidados del grupo por habilidad |
+| GET | `/api/estadisticas/estudiante/:id` | JWT Tutor/Admin | Estadisticas de un estudiante especifico |
+| GET | `/api/estadisticas/grupo/:id` | JWT Tutor/Admin | Promedios consolidados del grupo por habilidad |
 
 **GET /api/estadisticas/estudiante/:id**
 ```json
@@ -306,14 +309,15 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 ### RECOMENDACIONES IA - /api/recomendaciones
 
 > Integra Google Gemini. Sin API key configurada usa respuesta simulada automaticamente.
+> Requiere JWT de tutor **o admin**. El scope de institucion se aplica automaticamente.
 
 | Metodo | Ruta | Auth | Descripcion |
 |---|---|---|---|
-| POST | `/api/recomendaciones/generar/estudiante/:id` | JWT Tutor | Genera recomendacion personalizada para un estudiante |
-| POST | `/api/recomendaciones/generar/grupo/:id` | JWT Tutor | Genera recomendacion consolidada para el grupo |
-| GET | `/api/recomendaciones/estudiante/:id` | JWT Tutor | Historial de recomendaciones del estudiante |
-| GET | `/api/recomendaciones/grupo/:id` | JWT Tutor | Historial de recomendaciones del grupo |
-| PATCH | `/api/recomendaciones/:id/archivar` | JWT Tutor | Archiva (desactiva) una recomendacion para ocultarla del dashboard |
+| POST | `/api/recomendaciones/generar/estudiante/:id` | JWT Tutor/Admin | Genera recomendacion personalizada para un estudiante |
+| POST | `/api/recomendaciones/generar/grupo/:id` | JWT Tutor/Admin | Genera recomendacion consolidada para el grupo |
+| GET | `/api/recomendaciones/estudiante/:id` | JWT Tutor/Admin | Historial de recomendaciones del estudiante |
+| GET | `/api/recomendaciones/grupo/:id` | JWT Tutor/Admin | Historial de recomendaciones del grupo |
+| PATCH | `/api/recomendaciones/:id/archivar` | JWT Tutor/Admin | Archiva (desactiva) una recomendacion para ocultarla del dashboard |
 
 **POST /api/recomendaciones/generar/estudiante/:id**
 ```json
@@ -338,8 +342,8 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 |---|---|---|---|
 | GET | `/api/minijuegos` | Publica | Lista minijuegos activos |
 | GET | `/api/minijuegos/:id` | Publica | Detalle de un minijuego |
-| POST | `/api/minijuegos` | JWT Admin | Crea un minijuego |
-| PATCH | `/api/minijuegos/:id/estado` | JWT Admin | Activa o desactiva minijuego |
+| POST | `/api/minijuegos` | JWT Superadmin | Crea un minijuego |
+| PATCH | `/api/minijuegos/:id/estado` | JWT Superadmin | Activa o desactiva minijuego |
 
 ---
 
