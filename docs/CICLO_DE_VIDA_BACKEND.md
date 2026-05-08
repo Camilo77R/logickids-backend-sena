@@ -1,4 +1,4 @@
-# Ciclo de Vida Backend Para Novatos
+# Ciclo de Vida Backend
 
 ## Qué cambiamos
 
@@ -268,3 +268,4 @@ La mejor forma de entender este cambio es esta:
 > Ahora el sistema "administra su ciclo de vida".
 
 Eso es más profesional, más seguro y más parecido a un producto real.
+
