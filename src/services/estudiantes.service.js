@@ -206,14 +206,28 @@ export const actualizar = async (id_estudiante, user, datos) => {
  */
 export const desactivar = async (id_estudiante, user) => {
   await assertStudentBelongsToUser(id_estudiante, user);
-  const { id_estado_estudiante } = await db('estados_estudiante')
+  
+  const { id_estado_estudiante: idInactivo } = await db('estados_estudiante')
     .where({ nombre: 'inactivo' })
     .select('id_estado_estudiante')
     .first();
 
+  const estudiante = await db('estudiantes')
+    .where({ id_estudiante })
+    .select('estado_id')
+    .first();
+
+  if (!estudiante) {
+    throw new AppError('Estudiante no encontrado', 404);
+  }
+
+  if (estudiante.estado_id === idInactivo) {
+    throw new AppError('El estudiante ya está inactivo', 409);
+  }
+
   await db('estudiantes')
     .where({ id_estudiante })
-    .update({ estado_id: id_estado_estudiante, sesion_activa: false, actualizado_en: db.fn.now() });
+    .update({ estado_id: idInactivo, sesion_activa: false, actualizado_en: db.fn.now() });
 };
 
 /**
@@ -224,14 +238,28 @@ export const desactivar = async (id_estudiante, user) => {
  */
 export const reactivar = async (id_estudiante, user) => {
   await assertStudentBelongsToUser(id_estudiante, user);
-  const { id_estado_estudiante } = await db('estados_estudiante')
+  
+  const { id_estado_estudiante: idActivo } = await db('estados_estudiante')
     .where({ nombre: 'activo' })
     .select('id_estado_estudiante')
     .first();
 
+  const estudiante = await db('estudiantes')
+    .where({ id_estudiante })
+    .select('estado_id')
+    .first();
+
+  if (!estudiante) {
+    throw new AppError('Estudiante no encontrado', 404);
+  }
+
+  if (estudiante.estado_id === idActivo) {
+    throw new AppError('El estudiante ya está activo', 409);
+  }
+
   await db('estudiantes')
     .where({ id_estudiante })
-    .update({ estado_id: id_estado_estudiante, actualizado_en: db.fn.now() });
+    .update({ estado_id: idActivo, actualizado_en: db.fn.now() });
 };
 
 /**
