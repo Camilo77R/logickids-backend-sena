@@ -1,5 +1,5 @@
 import * as svc from '../services/grupos.service.js';
-import { ok, created, noContent } from '../utils/response.js';
+import { ok, created } from '../utils/response.js';
 
 export const listar = async (req, res, next) => {
   try {
@@ -33,8 +33,22 @@ export const actualizar = async (req, res, next) => {
 
 export const eliminar = async (req, res, next) => {
   try {
-    await svc.eliminar(req.params.id, req.user.id);
-    noContent(res);
+    const data = await svc.eliminar(Number(req.params.id), req.user.id);
+    ok(res, data, 'Grupo archivado correctamente');
+  } catch (e) { next(e); }
+};
+
+export const archivar = async (req, res, next) => {
+  try {
+    const data = await svc.archivar(Number(req.params.id), req.user.id);
+    ok(res, data, 'Grupo archivado correctamente');
+  } catch (e) { next(e); }
+};
+
+export const restaurar = async (req, res, next) => {
+  try {
+    const data = await svc.restaurar(Number(req.params.id), req.user.id);
+    ok(res, data, 'Grupo restaurado correctamente');
   } catch (e) { next(e); }
 };
 

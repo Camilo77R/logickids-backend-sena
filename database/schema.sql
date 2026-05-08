@@ -102,10 +102,16 @@ CREATE TABLE IF NOT EXISTS public.grupos
     nombre character varying(100) COLLATE pg_catalog."default" NOT NULL,
     descripcion character varying(255) COLLATE pg_catalog."default",
     predeterminado boolean NOT NULL DEFAULT false,
+    activo boolean NOT NULL DEFAULT true,
+    archivado_en timestamp with time zone,
     creado_en timestamp with time zone NOT NULL DEFAULT now(),
     actualizado_en timestamp with time zone NOT NULL DEFAULT now(),
     institucion_id integer,
     CONSTRAINT grupos_pkey PRIMARY KEY (id_grupo),
+    CONSTRAINT ck_grupos_estado_consistente CHECK (
+        (activo = true AND archivado_en IS NULL) OR
+        (activo = false AND archivado_en IS NOT NULL)
+    ),
     CONSTRAINT grupos_usuario_id_nombre_key UNIQUE (usuario_id, nombre)
 );
 
@@ -125,10 +131,18 @@ CREATE TABLE IF NOT EXISTS public.instituciones
     ciudad character varying(100) COLLATE pg_catalog."default",
     direccion character varying(200) COLLATE pg_catalog."default",
     telefono character varying(30) COLLATE pg_catalog."default",
+    activo boolean NOT NULL DEFAULT true,
+    desactivado_en timestamp with time zone,
     creado_en timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT instituciones_pkey PRIMARY KEY (id_institucion),
+    CONSTRAINT ck_instituciones_estado_consistente CHECK (
+        (activo = true AND desactivado_en IS NULL) OR
+        (activo = false AND desactivado_en IS NOT NULL)
+    ),
     CONSTRAINT instituciones_nombre_key UNIQUE (nombre)
 );
+CREATE INDEX IF NOT EXISTS idx_instituciones_activo
+    ON public.instituciones(activo);
 
 CREATE TABLE IF NOT EXISTS public.logros
 (
@@ -329,6 +343,8 @@ ALTER TABLE IF EXISTS public.grupos
     ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_grupos_usuario
     ON public.grupos(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_grupos_activo
+    ON public.grupos(activo);
 
 
 ALTER TABLE IF EXISTS public.logros

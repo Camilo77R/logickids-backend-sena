@@ -18,6 +18,8 @@ router.get('/:id',  ctrl.obtener);
 router.post('/',    validate(crearGrupoSchema),     ctrl.crear);
 router.put('/:id',  validate(actualizarGrupoSchema), ctrl.actualizar);
 router.patch('/:id/sesion', validate(toggleSesionGrupoSchema), ctrl.toggleSesion);
+router.patch('/:id/archivar', ctrl.archivar);
+router.patch('/:id/restaurar', ctrl.restaurar);
 router.delete('/:id', ctrl.eliminar);
 
 export default router;

@@ -49,6 +49,11 @@ export const listarCatalogo = async (estudiante_id = null) => {
   }));
 };
 
+export const listarCatalogoTutor = async (estudiante_id, user) => {
+  await assertStudentBelongsToUser(estudiante_id, user);
+  return listarCatalogo(estudiante_id);
+};
+
 export const listar = async (estudiante_id, user) => {
   await assertStudentBelongsToUser(estudiante_id, user);
   return listarPorEstudiante(estudiante_id);

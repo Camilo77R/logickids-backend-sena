@@ -1,5 +1,4 @@
 import * as svc from '../services/auth.service.js';
-import { listarInstituciones } from '../services/admin.service.js';
 import { ok, created } from '../utils/response.js';
 
 /**
@@ -8,7 +7,7 @@ import { ok, created } from '../utils/response.js';
  */
 export const instituciones = async (_req, res, next) => {
   try {
-    const data = await listarInstituciones();
+    const data = await svc.listarInstitucionesPublicas();
     ok(res, data, 'Instituciones obtenidas correctamente');
   } catch (e) { next(e); }
 };

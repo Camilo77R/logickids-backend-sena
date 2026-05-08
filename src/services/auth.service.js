@@ -14,6 +14,7 @@ const USER_FIELDS = [
   'estados_usuario.nombre as estado',
   'instituciones.nombre as institucion',
   'instituciones.ciudad as institucion_ciudad',
+  'instituciones.activo as institucion_activa',
 ];
 
 const baseQuery = () =>
@@ -37,22 +38,46 @@ const resolveEstadoUsuarioId = (nombre) =>
     return r.id_estado_usuario;
   });
 
-const assertInstitutionExists = async (institucion_id) => {
+const assertInstitutionAvailableForRegistration = async (institucion_id) => {
   const institution = await db('instituciones')
     .where({ id_institucion: institucion_id })
-    .select('id_institucion')
+    .select('id_institucion', 'activo')
     .first();
 
   if (!institution) {
     throw new AppError('La institución seleccionada no existe', 404);
   }
+
+  if (institution.activo === false) {
+    throw new AppError('La institución seleccionada está desactivada y no acepta registros nuevos', 409);
+  }
 };
+
+const assertInstitutionActiveForLogin = (user) => {
+  const requiresInstitution = user.rol !== 'superadmin' && user.institucion_id != null;
+  if (requiresInstitution && user.institucion_activa === false) {
+    throw new AppError('La institución del usuario está desactivada y no puede iniciar sesión', 403);
+  }
+};
+
+export const listarInstitucionesPublicas = () =>
+  db('instituciones')
+    .where({ activo: true })
+    .select(
+      'id_institucion',
+      'nombre',
+      'ciudad',
+      'direccion',
+      'telefono',
+      'creado_en'
+    )
+    .orderBy('nombre', 'asc');
 
 export const registrar = async ({ nombre, email, contrasena, institucion_id }) => {
   const exists = await db('usuarios').where({ email }).first();
   if (exists) throw new AppError('El email ya está registrado', 409);
 
-  await assertInstitutionExists(institucion_id);
+  await assertInstitutionAvailableForRegistration(institucion_id);
 
   const [rol_id, estado_id, contrasena_hash] = await Promise.all([
     resolveRolId('tutor'),
@@ -74,10 +99,15 @@ export const login = async ({ email, contrasena }) => {
     .first();
 
   if (!user) throw new AppError('Credenciales incorrectas', 401);
-  if (user.estado !== 'activo') throw new AppError('Cuenta suspendida o inactiva', 403);
 
   const valid = await bcrypt.compare(contrasena, user.contrasena_hash);
   if (!valid) throw new AppError('Credenciales incorrectas', 401);
+
+  if (user.estado !== 'activo') {
+    throw new AppError('Cuenta suspendida o inactiva', 403);
+  }
+
+  assertInstitutionActiveForLogin(user);
 
   const { contrasena_hash: _, ...userData } = user;
   const token = signToken({

@@ -28,6 +28,43 @@ const assertTenantScopedUser = (user) => {
 };
 
 /**
+ * Aplica el scope histórico de estudiantes.
+ *
+ * Analogía: aunque un niño ya no esté sentado hoy en un salón activo,
+ * seguimos pudiendo saber si alguna vez perteneció al salón del tutor.
+ * Eso permite reasignarlo después de archivar un grupo sin perder ownership.
+ */
+export const applyStudentOwnershipScope = (
+  query,
+  user,
+  {
+    studentIdColumn = 'estudiantes.id_estudiante',
+    historyAlias = 'egh_scope',
+    groupAlias = 'grupos_scope',
+  } = {}
+) => {
+  assertTenantScopedUser(user);
+
+  if (user.rol === 'superadmin') {
+    return query;
+  }
+
+  query.whereExists(function scopeStudentHistory() {
+    this.select(db.raw('1'))
+      .from(`estudiante_grupo_historial as ${historyAlias}`)
+      .join(`grupos as ${groupAlias}`, `${groupAlias}.id_grupo`, `${historyAlias}.grupo_id`)
+      .whereRaw(`${historyAlias}.estudiante_id = ${studentIdColumn}`)
+      .where(`${groupAlias}.institucion_id`, user.institucion_id);
+
+    if (user.rol === 'tutor') {
+      this.where(`${groupAlias}.usuario_id`, user.id);
+    }
+  });
+
+  return query;
+};
+
+/**
  * Aplica scope de acceso sobre entidades que dependen de grupos.
  * - superadmin: acceso global
  * - admin: acceso a cualquier grupo de su institución
@@ -76,7 +113,14 @@ export const applyInstitutionScope = (query, user, tenantColumn = 'institucion_i
 export const assertGroupBelongsToUser = async (grupoId, user, trx = db) => {
   const query = trx('grupos')
     .where('grupos.id_grupo', grupoId)
-    .select('grupos.id_grupo', 'grupos.usuario_id', 'grupos.nombre', 'grupos.institucion_id');
+    .select(
+      'grupos.id_grupo',
+      'grupos.usuario_id',
+      'grupos.nombre',
+      'grupos.institucion_id',
+      'grupos.activo',
+      'grupos.archivado_en'
+    );
 
   applyGroupAccessScope(query, user);
 
@@ -103,7 +147,7 @@ export const assertStudentBelongsToUser = async (studentId, user, trx = db) => {
     'grupos.institucion_id'
   );
 
-  applyGroupAccessScope(query, user);
+  applyStudentOwnershipScope(query, user);
 
   const student = await query.first();
   if (!student) {
@@ -130,7 +174,7 @@ export const assertSessionBelongsToUser = async (sessionId, user, trx = db) => {
     'grupos.institucion_id'
   );
 
-  applyGroupAccessScope(query, user);
+  applyStudentOwnershipScope(query, user, { studentIdColumn: 'estudiantes.id_estudiante' });
 
   const session = await query.first();
   if (!session) {

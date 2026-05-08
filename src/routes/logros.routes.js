@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/logros.controller.js';
-import { requireAuth, requireEstudiante, requireRole } from '../middlewares/auth.js';
+import { attachOptionalSession, requireAuth, requireEstudiante, requireRole } from '../middlewares/auth.js';
 
 const router = Router();
 
 // Catálogo público — cualquiera puede ver qué logros existen
-router.get('/catalogo', ctrl.catalogo);
+router.get('/catalogo', attachOptionalSession, ctrl.catalogo);
 
 // Rutas del estudiante autenticado
 router.get('/mis-logros', requireEstudiante, ctrl.misLogros);

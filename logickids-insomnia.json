@@ -7,6 +7,8 @@
   },
   "variable": [
     { "key": "base_url", "value": "http://localhost:3000/api" },
+    { "key": "token_superadmin", "value": "" },
+    { "key": "token_admin", "value": "" },
     { "key": "token_tutor", "value": "" },
     { "key": "token_estudiante", "value": "" }
   ],
@@ -58,6 +60,18 @@
           }
         },
         {
+          "name": "POST login admin",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin.colegiosanmarcos@logickids.dev\",\n  \"contrasena\": \"Temporal12345!\"\n}"
+            }
+          }
+        },
+        {
           "name": "GET perfil tutor",
           "request": {
             "method": "GET",
@@ -105,7 +119,7 @@
           "request": {
             "method": "GET",
             "url": "{{base_url}}/admin/usuarios",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_admin}}" }]
           }
         },
         {
@@ -113,7 +127,7 @@
           "request": {
             "method": "GET",
             "url": "{{base_url}}/admin/usuarios/1",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_admin}}" }]
           }
         },
         {
@@ -122,7 +136,7 @@
             "method": "PATCH",
             "url": "{{base_url}}/admin/usuarios/1/estado",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Authorization", "value": "Bearer {{token_admin}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -136,7 +150,23 @@
           "request": {
             "method": "GET",
             "url": "{{base_url}}/admin/instituciones",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_superadmin}}" }]
+          }
+        },
+        {
+          "name": "GET instituciones activas (superadmin)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/instituciones?estado=activas",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_superadmin}}" }]
+          }
+        },
+        {
+          "name": "GET instituciones desactivadas (superadmin)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/instituciones?estado=desactivadas",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_superadmin}}" }]
           }
         },
         {
@@ -145,7 +175,7 @@
             "method": "POST",
             "url": "{{base_url}}/admin/instituciones",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Authorization", "value": "Bearer {{token_superadmin}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -155,11 +185,42 @@
           }
         },
         {
-          "name": "DELETE eliminar institución (superadmin)",
+          "name": "PUT actualizar institución (superadmin)",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/admin/instituciones/1",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token_superadmin}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Colegio San Marcos Actualizado\",\n  \"ciudad\": \"Bogotá\",\n  \"direccion\": \"Cra 15 #20-30\",\n  \"telefono\": \"6015550000\"\n}"
+            }
+          }
+        },
+        {
+          "name": "PATCH desactivar institución (superadmin)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/admin/instituciones/1/desactivar",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_superadmin}}" }]
+          }
+        },
+        {
+          "name": "PATCH reactivar institución (superadmin)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/admin/instituciones/1/reactivar",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_superadmin}}" }]
+          }
+        },
+        {
+          "name": "DELETE institución (compatibilidad: desactiva)",
           "request": {
             "method": "DELETE",
             "url": "{{base_url}}/admin/instituciones/1",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_superadmin}}" }]
           }
         },
         {
@@ -167,7 +228,7 @@
           "request": {
             "method": "GET",
             "url": "{{base_url}}/admin/minijuegos",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_superadmin}}" }]
           }
         },
         {
@@ -176,7 +237,7 @@
             "method": "PATCH",
             "url": "{{base_url}}/admin/minijuegos/1/toggle",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Authorization", "value": "Bearer {{token_superadmin}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -237,7 +298,23 @@
           }
         },
         {
-          "name": "DELETE eliminar grupo",
+          "name": "PATCH archivar grupo",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/grupos/1/archivar",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "PATCH restaurar grupo",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/grupos/1/restaurar",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "DELETE grupo (compatibilidad: archiva)",
           "request": {
             "method": "DELETE",
             "url": "{{base_url}}/grupos/1",
@@ -381,7 +458,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nuevo_grupo_id\": 2\n}"
+              "raw": "{\n  \"grupo_id\": 2\n}"
             }
           }
         },
@@ -516,10 +593,19 @@
           }
         },
         {
-          "name": "GET catálogo con estado del estudiante",
+          "name": "GET catálogo con estado del estudiante (tutor/admin)",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/logros/catalogo?estudiante_id=1"
+            "url": "{{base_url}}/logros/catalogo?estudiante_id=1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_tutor}}" }]
+          }
+        },
+        {
+          "name": "GET mi catálogo con estado (estudiante)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/logros/catalogo?estudiante_id=1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token_estudiante}}" }]
           }
         },
         {
@@ -608,7 +694,7 @@
             "method": "POST",
             "url": "{{base_url}}/minijuegos",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Authorization", "value": "Bearer {{token_superadmin}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
@@ -623,7 +709,7 @@
             "method": "PATCH",
             "url": "{{base_url}}/minijuegos/1/estado",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token_tutor}}" },
+              { "key": "Authorization", "value": "Bearer {{token_superadmin}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {

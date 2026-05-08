@@ -149,12 +149,31 @@ Pruebas manuales para validar el aislamiento por `institucion_id`, los permisos 
 3. Esperado:
 - `200` o `201` segun la accion
 
-## Caso 13. No se puede eliminar institucion con usuarios asociados
+## Caso 13. Superadmin desactiva institucion sin borrarla
 
 1. Login como `superadmin`
-2. `DELETE /api/admin/instituciones/:idInstitucionA`
+2. `PATCH /api/admin/instituciones/:idInstitucionA/desactivar`
 3. Esperado:
-- `409`
+- `200`
+- la institucion sigue existiendo pero queda con `activo: false`
+- desaparece de `GET /api/auth/instituciones`
+
+## Caso 14. Usuarios de institucion desactivada quedan bloqueados
+
+1. Con un token ya emitido para `adminA` o `tutorA`
+2. Probar una ruta protegida, por ejemplo `GET /api/admin/usuarios` o `GET /api/grupos`
+3. Esperado:
+- `403`
+- mensaje indicando que la institucion ya no esta habilitada
+
+## Caso 15. Reactivar institucion devuelve la operacion
+
+1. Login como `superadmin`
+2. `PATCH /api/admin/instituciones/:idInstitucionA/reactivar`
+3. Esperado:
+- `200`
+- la institucion vuelve a `activo: true`
+- reaparece en `GET /api/auth/instituciones`
 
 ## Señales de exito
 
@@ -164,4 +183,5 @@ El tenant esta razonablemente bien aplicado si:
 - un `admin` no entra a rutas de tutor
 - un `tutor` nunca ve grupos ni estudiantes de otro tutor
 - un tutor nuevo no puede entrar hasta ser activado
+- una institucion desactivada bloquea a sus usuarios aunque tengan token previo
 - `superadmin` mantiene solo las capacidades globales

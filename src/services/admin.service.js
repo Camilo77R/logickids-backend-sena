@@ -95,7 +95,7 @@ export const cambiarEstadoUsuario = async (id_usuario, estado_nombre, admin) => 
 
 // --- INSTITUCIONES ---
 
-export const listarInstituciones = () =>
+const buildInstitucionesQuery = () =>
   db('instituciones')
     .leftJoin('usuarios as u', function () {
       this.on('u.institucion_id', 'instituciones.id_institucion')
@@ -114,10 +114,28 @@ export const listarInstituciones = () =>
       'instituciones.ciudad',
       'instituciones.direccion',
       'instituciones.telefono',
+      'instituciones.activo',
+      'instituciones.desactivado_en',
       'instituciones.creado_en',
       db.raw('COUNT(r.id_rol) as tutores_activos')
-    )
-    .orderBy('instituciones.nombre', 'asc');
+    );
+
+export const listarInstituciones = ({ estado = 'todas' } = {}) => {
+  const query = buildInstitucionesQuery();
+
+  if (estado === 'activas') {
+    query.where('instituciones.activo', true);
+  } else if (estado === 'desactivadas') {
+    query.where('instituciones.activo', false);
+  } else if (estado !== 'todas') {
+    throw new AppError('Filtro de estado no válido. Use: activas | desactivadas | todas', 400);
+  }
+
+  return query.orderBy([
+    { column: 'instituciones.activo', order: 'desc' },
+    { column: 'instituciones.nombre', order: 'asc' },
+  ]);
+};
 
 export const crearInstitucion = async ({ nombre, ciudad, direccion, telefono }) => {
   const exists = await db('instituciones').where({ nombre }).first();
@@ -161,17 +179,73 @@ export const crearInstitucion = async ({ nombre, ciudad, direccion, telefono }) 
 };
 
 export const eliminarInstitucion = async (id_institucion) => {
-  const conUsuarios = await db('usuarios')
-    .where({ institucion_id: id_institucion })
+  return desactivarInstitucion(id_institucion);
+};
+
+export const desactivarInstitucion = async (id_institucion) => {
+  const institution = await db('instituciones')
+    .where({ id_institucion })
+    .select('id_institucion', 'activo')
     .first();
-  if (conUsuarios) {
-    throw new AppError('No se puede eliminar: tiene usuarios asociados', 409);
+
+  if (!institution) {
+    throw new AppError('Institución no encontrada', 404);
+  }
+
+  if (institution.activo === false) {
+    throw new AppError('La institución ya está desactivada', 409);
   }
 
   return db.transaction(async (trx) => {
-    const deleted = await trx('instituciones').where({ id_institucion }).delete();
-    if (!deleted) throw new AppError('Institución no encontrada', 404);
+    await trx('estudiantes')
+      .where({ institucion_id: id_institucion })
+      .update({ sesion_activa: false, actualizado_en: trx.fn.now() });
+
+    const [updated] = await trx('instituciones')
+      .where({ id_institucion })
+      .update({
+        activo: false,
+        desactivado_en: trx.fn.now(),
+      })
+      .returning([
+        'id_institucion as id',
+        'nombre',
+        'activo',
+        'desactivado_en',
+      ]);
+
+    return updated;
   });
+};
+
+export const reactivarInstitucion = async (id_institucion) => {
+  const institution = await db('instituciones')
+    .where({ id_institucion })
+    .select('id_institucion', 'activo')
+    .first();
+
+  if (!institution) {
+    throw new AppError('Institución no encontrada', 404);
+  }
+
+  if (institution.activo === true) {
+    throw new AppError('La institución ya está activa', 409);
+  }
+
+  const [updated] = await db('instituciones')
+    .where({ id_institucion })
+    .update({
+      activo: true,
+      desactivado_en: null,
+    })
+    .returning([
+      'id_institucion as id',
+      'nombre',
+      'activo',
+      'desactivado_en',
+    ]);
+
+  return updated;
 };
 
 /**
@@ -210,7 +284,16 @@ export const actualizarInstitucion = async (id_institucion, datos) => {
   const [actualizada] = await db('instituciones')
     .where({ id_institucion })
     .update(updates)
-    .returning(['id_institucion as id', 'nombre', 'ciudad', 'direccion', 'telefono', 'creado_en']);
+    .returning([
+      'id_institucion as id',
+      'nombre',
+      'ciudad',
+      'direccion',
+      'telefono',
+      'activo',
+      'desactivado_en',
+      'creado_en',
+    ]);
 
   return actualizada;
 };

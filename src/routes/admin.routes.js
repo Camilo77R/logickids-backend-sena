@@ -22,6 +22,8 @@ router.patch('/usuarios/:id/estado', requireRole('admin'), validate(cambiarEstad
 router.get('/instituciones',      requireRole('superadmin'), ctrl.listarInstituciones);
 router.post('/instituciones',     requireRole('superadmin'), validate(crearInstitucionSchema),      ctrl.crearInstitucion);
 router.put('/instituciones/:id',  requireRole('superadmin'), validate(actualizarInstitucionSchema), ctrl.actualizarInstitucion);
+router.patch('/instituciones/:id/desactivar', requireRole('superadmin'), ctrl.desactivarInstitucion);
+router.patch('/instituciones/:id/reactivar',  requireRole('superadmin'), ctrl.reactivarInstitucion);
 router.delete('/instituciones/:id', requireRole('superadmin'), ctrl.eliminarInstitucion);
 router.get('/minijuegos', requireRole('superadmin'), ctrl.listarMinijuegos);
 router.patch('/minijuegos/:id/toggle', requireRole('superadmin'), validate(toggleMinijuegoSchema), ctrl.toggleMinijuego);

@@ -25,7 +25,9 @@ export const cambiarEstadoUsuario = async (req, res, next) => {
 
 export const listarInstituciones = async (req, res, next) => {
   try {
-    const data = await adminService.listarInstituciones();
+    const data = await adminService.listarInstituciones({
+      estado: req.query.estado ?? 'todas',
+    });
     ok(res, data, 'Instituciones obtenidas correctamente');
   } catch (error) { next(error); }
 };
@@ -37,10 +39,28 @@ export const crearInstitucion = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+export const desactivarInstitucion = async (req, res, next) => {
+  try {
+    const data = await adminService.desactivarInstitucion(Number(req.params.id));
+    ok(res, data, 'Institución desactivada correctamente');
+  } catch (error) { next(error); }
+};
+
+/**
+ * Alias temporal para no romper clientes antiguos que aún llaman DELETE.
+ * Internamente ya no elimina: desactiva.
+ */
 export const eliminarInstitucion = async (req, res, next) => {
   try {
-    await adminService.eliminarInstitucion(Number(req.params.id));
-    ok(res, { eliminada: true }, 'Institución eliminada correctamente');
+    const data = await adminService.eliminarInstitucion(Number(req.params.id));
+    ok(res, data, 'Institución desactivada correctamente');
+  } catch (error) { next(error); }
+};
+
+export const reactivarInstitucion = async (req, res, next) => {
+  try {
+    const data = await adminService.reactivarInstitucion(Number(req.params.id));
+    ok(res, data, 'Institución reactivada correctamente');
   } catch (error) { next(error); }
 };
 

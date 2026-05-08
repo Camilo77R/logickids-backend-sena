@@ -63,6 +63,17 @@ describe('🛡️ Seguridad — Health check siempre disponible', () => {
     expect(res.status).toBe(200);
   });
 
+  it('✅ GET /api/logros/catalogo sigue siendo público', async () => {
+    const res = await request(app).get('/api/logros/catalogo');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('❌ GET /api/logros/catalogo?estudiante_id=1 ya no expone progreso sin sesión', async () => {
+    const res = await request(app).get('/api/logros/catalogo?estudiante_id=1');
+    expect(res.status).toBe(401);
+  });
+
 });
 
 describe('🛡️ Seguridad — Endpoints protegidos rechazan sin token', () => {

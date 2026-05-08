@@ -4,11 +4,32 @@ import { ok, created } from '../utils/response.js';
 
 export const catalogo = async (req, res, next) => {
   try {
-    // Permite marcar logros como desbloqueados si se pasa ?estudiante_id=
-    // o si el que consulta es un estudiante autenticado (HU-25)
-    const estudiante_id = req.estudiante?.id ?? (req.query.estudiante_id ? Number(req.query.estudiante_id) : null);
-    const data = await svc.listarCatalogo(estudiante_id);
-    ok(res, data, 'Catálogo de logros obtenido correctamente');
+    const requestedStudentId = req.query.estudiante_id ? Number(req.query.estudiante_id) : null;
+
+    if (!requestedStudentId) {
+      const data = await svc.listarCatalogo();
+      return ok(res, data, 'Catálogo de logros obtenido correctamente');
+    }
+
+    if (!Number.isInteger(requestedStudentId) || requestedStudentId <= 0) {
+      throw new AppError('El parámetro estudiante_id no es válido', 400);
+    }
+
+    if (req.estudiante?.id === requestedStudentId) {
+      const data = await svc.listarCatalogo(requestedStudentId);
+      return ok(res, data, 'Catálogo de logros obtenido correctamente');
+    }
+
+    if (req.user) {
+      const data = await svc.listarCatalogoTutor(requestedStudentId, req.user);
+      return ok(res, data, 'Catálogo de logros obtenido correctamente');
+    }
+
+    throw new AppError(
+      'Debes autenticarte para consultar el estado de logros de un estudiante específico',
+      401
+    );
+
   } catch (e) { next(e); }
 };
 

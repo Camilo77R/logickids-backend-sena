@@ -17,9 +17,19 @@ const resolveCatalogId = async (table, pkColumn, nombre) => {
  */
 export const iniciar = async (estudiante_id, { minijuego_id }) => {
   const est = await db('estudiantes')
+    .leftJoin('estudiante_grupo_historial as egh', function joinCurrentGroup() {
+      this.on('egh.estudiante_id', 'estudiantes.id_estudiante')
+        .andOn('egh.activo', db.raw('TRUE'))
+        .andOnNull('egh.fecha_fin');
+    })
+    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
     .where({ id_estudiante: estudiante_id })
-    .select('sesion_activa')
+    .select('estudiantes.sesion_activa', 'egh.grupo_id', 'grupos.activo as grupo_activo')
     .first();
+
+  if (!est?.grupo_id || est.grupo_activo === false) {
+    throw new AppError('El estudiante no tiene un grupo activo habilitado para jugar', 403);
+  }
 
   if (!est?.sesion_activa) {
     throw new AppError('Sesión no activa. El tutor debe abrir la clase primero.', 403);

@@ -3,7 +3,7 @@ import { db } from '../config/db.js';
 import { env } from '../config/env.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import {
-  applyGroupAccessScope,
+  applyStudentOwnershipScope,
   assertGroupBelongsToUser,
   assertStudentBelongsToUser,
   getActiveStudentIdsByGroup,
@@ -54,12 +54,16 @@ const generateUniqueQR = async () => {
  */
 export const loginEstudiante = async (qr_token) => {
   const est = await baseQuery()
+    .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
     .where('estudiantes.qr_token', qr_token)
-    .select([...STUDENT_FIELDS, 'estudiantes.qr_token'])
+    .select([...STUDENT_FIELDS, 'estudiantes.qr_token', 'instituciones.activo as institucion_activa'])
     .first();
 
   if (!est) throw new AppError('QR inválido', 404);
   if (est.estado !== 'activo') throw new AppError('Estudiante inactivo', 403);
+  if (est.institucion_activa === false) {
+    throw new AppError('La institución del estudiante está desactivada', 403);
+  }
 
   const token = jwt.sign(
     { id: est.id, nombre: est.nombre, grupo_id: est.grupo_id },
@@ -83,10 +87,11 @@ export const listar = async (user, grupo_id) => {
   let query = baseQuery()
     .join('grupos', 'grupos.id_grupo', 'egh.grupo_id')
     .where('estados_estudiante.nombre', 'activo')
+    .where('grupos.activo', true)
     .select(STUDENT_FIELDS)
     .orderBy('estudiantes.nombre');
 
-  query = applyGroupAccessScope(query, user);
+  query = applyStudentOwnershipScope(query, user);
 
   if (grupo_id) query = query.where('egh.grupo_id', grupo_id);
   return query;
@@ -104,11 +109,11 @@ export const listarTodos = async (user, grupo_id) => {
     db('estudiantes')
       .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
   )
-    .join('grupos', 'grupos.id_grupo', 'egh.grupo_id')
-    .select([...STUDENT_FIELDS, 'estados_estudiante.nombre as estado'])
+    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
+    .select([...STUDENT_FIELDS, 'estados_estudiante.nombre as estado', 'grupos.activo as grupo_activo'])
     .orderBy('estudiantes.nombre');
 
-  query = applyGroupAccessScope(query, user);
+  query = applyStudentOwnershipScope(query, user);
 
   if (grupo_id) query = query.where('egh.grupo_id', grupo_id);
   return query;
@@ -255,24 +260,6 @@ export const obtenerQR = async (id_estudiante, user) => {
 export const toggleSesion = async (id_estudiante, user, sesion_activa) => {
   await assertStudentBelongsToUser(id_estudiante, user);
   await db('estudiantes').where({ id_estudiante }).update({ sesion_activa, actualizado_en: db.fn.now() });
-};
-
-/**
- * @deprecated Usar grupos.service.js → toggleSesion() que incluye la guard de estudiantes vacíos (HU-13).
- * Mantenida para compatibilidad interna pero ya no expuesta por ninguna ruta.
- */
-export const toggleSesionGrupo = async (grupo_id, user, sesion_activa) => {
-  const ids = await getActiveStudentIdsByGroup(grupo_id, user);
-
-  if (!ids.length) {
-    return { actualizados: 0, sesion_activa };
-  }
-
-  await db('estudiantes')
-    .whereIn('id_estudiante', ids)
-    .update({ sesion_activa, actualizado_en: db.fn.now() });
-
-  return { actualizados: ids.length, sesion_activa };
 };
 
 /**
