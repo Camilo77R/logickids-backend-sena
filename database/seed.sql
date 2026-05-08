@@ -99,4 +99,163 @@ SELECT
 FROM public.roles WHERE nombre = 'superadmin'
 ON CONFLICT (email) DO NOTHING;
 
+-- 12. INSTITUCION DE PRUEBA
+INSERT INTO public.instituciones (nombre, ciudad, direccion, telefono, activo)
+VALUES
+  ('Colegio Prueba', 'Bogotá', 'Calle 123 #45-67', '3001234567', true)
+ON CONFLICT (nombre) DO NOTHING;
+
+-- 13. TUTOR DE PRUEBA ACTIVO
+-- Contraseña: Tutor123!
+-- Hash generado con bcrypt, costo 10.
+INSERT INTO public.usuarios (nombre, email, contrasena_hash, rol_id, institucion_id, estado_id)
+SELECT
+  'Tutor de Prueba',
+  'tutor@logickids.dev',
+  '$2b$10$GIQ02VOfuri1nFxYXn3iWe//jd6boLXKCIShI7EDHS38s0Tob6AO6', -- contraseña: Tutor123! — CAMBIAR en producción
+  id_rol,
+  id_institucion,
+  1
+FROM public.roles, public.instituciones
+WHERE roles.nombre = 'tutor' AND instituciones.nombre = 'Colegio Prueba'
+ON CONFLICT (email) DO NOTHING;
+
+-- 14. GRUPO DE PRUEBA PARA EL TUTOR
+INSERT INTO public.grupos (usuario_id, institucion_id, nombre, descripcion, activo)
+SELECT
+  u.id_usuario,
+  i.id_institucion,
+  'Grupo Matemáticas 5A',
+  'Grupo de matemáticas para quinto grado',
+  true
+FROM public.usuarios u, public.instituciones i
+WHERE u.email = 'tutor@logickids.dev' AND i.nombre = 'Colegio Prueba'
+ON CONFLICT DO NOTHING;
+
+-- 15. ESTUDIANTE DE PRUEBA
+INSERT INTO public.estudiantes (institucion_id, nombre, edad, color_avatar, qr_token, estado_id)
+VALUES
+  (1, 'Ana García', 10, '#FF6B6B', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test_qr_token', 1)
+ON CONFLICT (qr_token) DO NOTHING;
+
+-- 16. ASIGNAR ESTUDIANTE AL GRUPO
+INSERT INTO public.estudiante_grupo_historial (estudiante_id, grupo_id, fecha_inicio, activo)
+SELECT
+  e.id_estudiante,
+  g.id_grupo,
+  CURRENT_DATE,
+  true
+FROM public.estudiantes e, public.grupos g, public.usuarios u
+WHERE e.nombre = 'Ana García' AND g.nombre = 'Grupo Matemáticas 5A' AND u.email = 'tutor@logickids.dev' AND g.usuario_id = u.id_usuario
+ON CONFLICT DO NOTHING;
+
+-- 17. SESIÓN DE JUEGO COMPLETADA (EJEMPLO)
+INSERT INTO public.sesiones_juego (estudiante_id, minijuego_id, dificultad, puntaje, aciertos, errores, combo_maximo, estado_id, iniciada_en, finalizada_en)
+SELECT
+  e.id_estudiante,
+  m.id_minijuego,
+  2,
+  850,
+  15,
+  3,
+  8,
+  2, -- completado
+  CURRENT_TIMESTAMP - INTERVAL '30 minutes',
+  CURRENT_TIMESTAMP - INTERVAL '25 minutes'
+FROM public.estudiantes e, public.minijuegos m
+WHERE e.nombre = 'Ana García' AND m.slug = 'logica-secuencias'
+ON CONFLICT DO NOTHING;
+
+-- 18. EVENTOS DE LA SESIÓN (EJEMPLOS)
+-- Obtener el ID de la sesión insertada
+INSERT INTO public.eventos_sesion (sesion_id, tipo_evento_id, habilidad_id, tiempo_reaccion_ms, puntos, combo_en_evento, ocurrido_en)
+SELECT
+  sj.id_sesion_juego,
+  te.id_tipo_evento,
+  h.id_habilidad,
+  1200,
+  10,
+  0,
+  sj.iniciada_en + INTERVAL '2 minutes'
+FROM public.sesiones_juego sj
+JOIN public.estudiantes e ON sj.estudiante_id = e.id_estudiante
+JOIN public.tipos_evento te ON te.nombre = 'acierto'
+JOIN public.habilidades h ON h.nombre = 'Lógica'
+WHERE e.nombre = 'Ana García' AND sj.puntaje = 850
+UNION ALL
+SELECT
+  sj.id_sesion_juego,
+  te.id_tipo_evento,
+  h.id_habilidad,
+  800,
+  15,
+  1,
+  sj.iniciada_en + INTERVAL '5 minutes'
+FROM public.sesiones_juego sj
+JOIN public.estudiantes e ON sj.estudiante_id = e.id_estudiante
+JOIN public.tipos_evento te ON te.nombre = 'combo'
+JOIN public.habilidades h ON h.nombre = 'Lógica'
+WHERE e.nombre = 'Ana García' AND sj.puntaje = 850
+UNION ALL
+SELECT
+  sj.id_sesion_juego,
+  te.id_tipo_evento,
+  h.id_habilidad,
+  1500,
+  0,
+  0,
+  sj.iniciada_en + INTERVAL '10 minutes'
+FROM public.sesiones_juego sj
+JOIN public.estudiantes e ON sj.estudiante_id = e.id_estudiante
+JOIN public.tipos_evento te ON te.nombre = 'error'
+JOIN public.habilidades h ON h.nombre = 'Lógica'
+WHERE e.nombre = 'Ana García' AND sj.puntaje = 850
+ON CONFLICT DO NOTHING;
+
+-- 19. ESTADÍSTICAS GENERADAS
+INSERT INTO public.estadisticas_habilidad (estudiante_id, habilidad_id, total_intentos, aciertos, errores, precision_pct, promedio_reaccion_ms, actualizado_en)
+SELECT
+  e.id_estudiante,
+  h.id_habilidad,
+  18,
+  15,
+  3,
+  83.33,
+  1167,
+  CURRENT_TIMESTAMP
+FROM public.estudiantes e, public.habilidades h
+WHERE e.nombre = 'Ana García' AND h.nombre = 'Lógica'
+ON CONFLICT (estudiante_id, habilidad_id) DO UPDATE SET
+  total_intentos = EXCLUDED.total_intentos,
+  aciertos = EXCLUDED.aciertos,
+  errores = EXCLUDED.errores,
+  precision_pct = EXCLUDED.precision_pct,
+  promedio_reaccion_ms = EXCLUDED.promedio_reaccion_ms,
+  actualizado_en = EXCLUDED.actualizado_en;
+
+-- 20. LOGRO DESBLOQUEADO
+INSERT INTO public.logros (estudiante_id, catalogo_logro_id, desbloqueado_en)
+SELECT
+  e.id_estudiante,
+  cl.id_logro,
+  CURRENT_TIMESTAMP - INTERVAL '1 hour'
+FROM public.estudiantes e, public.catalogo_logros cl
+WHERE e.nombre = 'Ana García' AND cl.clave = 'precision_90'
+ON CONFLICT (estudiante_id, catalogo_logro_id) DO NOTHING;
+
+-- 21. RECOMENDACIÓN GENERADA POR IA
+INSERT INTO public.recomendaciones (estudiante_id, habilidad_id, severidad_id, modelo_ia_id, mensaje, precision_momento, generado_en, activo)
+SELECT
+  e.id_estudiante,
+  h.id_habilidad,
+  ns.id_nivel,
+  mia.id_modelo,
+  'Ana muestra buena comprensión de secuencias lógicas con una precisión del 83%. Recomiendo continuar practicando con niveles de dificultad media para mantener el engagement.',
+  83.33,
+  CURRENT_TIMESTAMP,
+  true
+FROM public.estudiantes e, public.habilidades h, public.niveles_severidad ns, public.modelos_ia mia
+WHERE e.nombre = 'Ana García' AND h.nombre = 'Lógica' AND ns.nombre = 'media' AND mia.nombre = 'gemini-1.5-flash'
+ON CONFLICT DO NOTHING;
+
 COMMIT;
