@@ -20,6 +20,20 @@ const STUDENT_FIELDS = [
 ];
 
 /**
+ * Campos extendidos para la experiencia móvil del estudiante.
+ *
+ * POR QUÉ:
+ * - el dashboard necesita saber si el estudiante tiene grupo visible
+ * - cuando hay grupo activo, también necesita saber si ese grupo sigue vigente
+ * - así el front presenta el estado, pero no inventa reglas
+ */
+const STUDENT_MOBILE_PROFILE_FIELDS = [
+  ...STUDENT_FIELDS,
+  'grupos.nombre as grupo_nombre',
+  'grupos.activo as grupo_activo',
+];
+
+/**
  * Query base reutilizable: estudiante + estado + grupo activo via historial.
  * Centraliza el join repetido en todo el servicio.
  */
@@ -54,9 +68,14 @@ const generateUniqueQR = async () => {
  */
 export const loginEstudiante = async (qr_token) => {
   const est = await baseQuery()
+    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
     .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
     .where('estudiantes.qr_token', qr_token)
-    .select([...STUDENT_FIELDS, 'estudiantes.qr_token', 'instituciones.activo as institucion_activa'])
+    .select([
+      ...STUDENT_MOBILE_PROFILE_FIELDS,
+      'estudiantes.qr_token',
+      'instituciones.activo as institucion_activa',
+    ])
     .first();
 
   if (!est) throw new AppError('QR inválido', 404);
@@ -142,8 +161,9 @@ export const obtener = async (id_estudiante, user) => {
  */
 export const obtenerPerfilInfantil = (id_estudiante) =>
   baseQuery()
+    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
     .where('estudiantes.id_estudiante', id_estudiante)
-    .select(STUDENT_FIELDS)
+    .select(STUDENT_MOBILE_PROFILE_FIELDS)
     .first();
 
 /**

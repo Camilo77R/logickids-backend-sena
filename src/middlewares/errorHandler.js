@@ -11,6 +11,10 @@ export class AppError extends Error {
 }
 
 export const errorHandler = (err, _req, res, _next) => {
+  if (typeof err?.message === 'string' && err.message.startsWith('CORS bloqueado')) {
+    return res.status(403).json({ success: false, message: err.message });
+  }
+
   // Errores de validación de Zod (si alguno llega aquí sin pasar por validate())
   if (err instanceof ZodError) {
     return res.status(400).json({
