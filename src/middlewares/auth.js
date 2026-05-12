@@ -1,12 +1,8 @@
-import jwt from 'jsonwebtoken';
-import { env } from '../config/env.js';
 import { AppError } from './errorHandler.js';
 import {
-  obtenerEstudianteAutenticado,
-  obtenerUsuarioAutenticado,
-  validarSesionEstudiante,
-  validarSesionWeb,
-} from '../services/session-access.service.js';
+  resolveStudentSessionFromToken,
+  resolveWebSessionFromToken,
+} from '../services/auth-session.service.js';
 
 const extractToken = (req) => {
   const header = req.headers.authorization;
@@ -14,33 +10,18 @@ const extractToken = (req) => {
   return header.split(' ')[1];
 };
 
-const isJwtLibraryError = (err) =>
-  ['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'].includes(err?.name);
-
-const resolveWebSession = async (token) => {
-  const payload = jwt.verify(token, env.JWT_SECRET);
-  const liveUser = await obtenerUsuarioAutenticado(payload.id);
-  return validarSesionWeb(liveUser);
-};
-
-const resolveStudentSession = async (token) => {
-  const payload = jwt.verify(token, env.JWT_STUDENT_SECRET);
-  const liveStudent = await obtenerEstudianteAutenticado(payload.id);
-  return validarSesionEstudiante(liveStudent);
-};
-
 export const requireAuth = async (req, _res, next) => {
   const token = extractToken(req);
   if (!token) return next(new AppError('Token de acceso requerido', 401));
 
   try {
-    req.user = await resolveWebSession(token);
+    req.user = await resolveWebSessionFromToken(token);
     next();
   } catch (err) {
     if (err instanceof AppError) {
       return next(err);
     }
-    next(new AppError(err.name === 'TokenExpiredError' ? 'Sesión expirada' : 'Token inválido', 401));
+    next(new AppError(err.name === 'TokenExpiredError' ? 'Sesion expirada' : 'Token invalido', 401));
   }
 };
 
@@ -49,13 +30,20 @@ export const requireEstudiante = async (req, _res, next) => {
   if (!token) return next(new AppError('Token de estudiante requerido', 401));
 
   try {
-    req.estudiante = await resolveStudentSession(token);
+    req.estudiante = await resolveStudentSessionFromToken(token);
     next();
   } catch (err) {
     if (err instanceof AppError) {
       return next(err);
     }
-    next(new AppError(err.name === 'TokenExpiredError' ? 'Sesión de estudiante expirada' : 'Token de estudiante inválido', 401));
+    next(
+      new AppError(
+        err.name === 'TokenExpiredError'
+          ? 'Sesion de estudiante expirada'
+          : 'Token de estudiante invalido',
+        401
+      )
+    );
   }
 };
 
@@ -73,26 +61,22 @@ export const attachOptionalSession = async (req, _res, next) => {
   if (!token) return next();
 
   try {
-    req.user = await resolveWebSession(token);
+    req.user = await resolveWebSessionFromToken(token);
     return next();
   } catch (webErr) {
-    if (webErr instanceof AppError && webErr.status !== 401) {
-      return next(webErr);
-    }
-
-    if (!(webErr instanceof AppError) && !isJwtLibraryError(webErr)) {
+    if (webErr instanceof AppError && webErr.statusCode !== 401) {
       return next(webErr);
     }
   }
 
   try {
-    req.estudiante = await resolveStudentSession(token);
+    req.estudiante = await resolveStudentSessionFromToken(token);
     return next();
   } catch (studentErr) {
     if (studentErr instanceof AppError) {
       return next(studentErr);
     }
-    next(new AppError(studentErr.name === 'TokenExpiredError' ? 'Sesión expirada' : 'Token inválido', 401));
+    next(new AppError(studentErr.name === 'TokenExpiredError' ? 'Sesion expirada' : 'Token invalido', 401));
   }
 };
 

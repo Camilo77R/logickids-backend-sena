@@ -11,8 +11,8 @@ const logroFields = [
   'catalogo_logros.icono',
 ];
 
-const resolveCatalogLogroId = async (clave) => {
-  const logro = await db('catalogo_logros')
+const resolveCatalogLogroId = async (clave, executor = db) => {
+  const logro = await executor('catalogo_logros')
     .where({ clave, activo: true })
     .select('id_catalogo_logro')
     .first();
@@ -66,15 +66,15 @@ export const listarPorEstudiante = (estudiante_id) =>
     .select(logroFields)
     .orderBy('logros.desbloqueado_en', 'desc');
 
-export const desbloquear = async (estudiante_id, clave_logro) => {
-  const catalogo_logro_id = await resolveCatalogLogroId(clave_logro);
+export const desbloquear = async (estudiante_id, clave_logro, executor = db) => {
+  const catalogo_logro_id = await resolveCatalogLogroId(clave_logro, executor);
 
-  await db('logros')
+  await executor('logros')
     .insert({ estudiante_id, catalogo_logro_id })
     .onConflict(['estudiante_id', 'catalogo_logro_id'])
     .ignore();
 
-  return db('logros')
+  return executor('logros')
     .join('catalogo_logros', 'catalogo_logros.id_catalogo_logro', 'logros.catalogo_logro_id')
     .where({
       'logros.estudiante_id': estudiante_id,
@@ -86,7 +86,8 @@ export const desbloquear = async (estudiante_id, clave_logro) => {
 
 export const evaluarLogrosSesion = async (
   estudiante_id,
-  { aciertos = 0, errores = 0, combo_maximo = 0, estado = 'completado' }
+  { aciertos = 0, errores = 0, combo_maximo = 0, estado = 'completado' },
+  executor = db
 ) => {
   if (estado !== 'completado') {
     return [];
@@ -96,12 +97,12 @@ export const evaluarLogrosSesion = async (
   const total_intentos = aciertos + errores;
   const precision = total_intentos > 0 ? (aciertos / total_intentos) * 100 : 0;
 
-  const { id_estado_sesion } = await db('estados_sesion')
+  const { id_estado_sesion } = await executor('estados_sesion')
     .where({ nombre: 'completado' })
     .select('id_estado_sesion')
     .first();
 
-  const [{ total_sesiones }] = await db('sesiones_juego')
+  const [{ total_sesiones }] = await executor('sesiones_juego')
     .where({
       estudiante_id,
       estado_id: id_estado_sesion,
@@ -126,7 +127,7 @@ export const evaluarLogrosSesion = async (
 
   const unlocked = [];
   for (const clave of [...new Set(claves)]) {
-    const logro = await desbloquear(estudiante_id, clave);
+    const logro = await desbloquear(estudiante_id, clave, executor);
     if (logro) {
       unlocked.push(logro);
     }

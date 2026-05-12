@@ -8,8 +8,8 @@ import {
  * Query base: estadísticas_habilidad + nombre de habilidad.
  * Centraliza el join repetido en el servicio.
  */
-const withHabilidad = () =>
-  db('estadisticas_habilidad').join(
+const withHabilidad = (executor = db) =>
+  executor('estadisticas_habilidad').join(
     'habilidades',
     'habilidades.id_habilidad',
     'estadisticas_habilidad.habilidad_id'
@@ -140,8 +140,8 @@ const calculateAverageReaction = (tiempos) => {
  * @param {number} estudiante_id
  * @param {number} sesion_id - ID de la sesión recién finalizada
  */
-export const actualizarStats = async (estudiante_id, sesion_id) => {
-  const eventos = await db('eventos_sesion')
+export const actualizarStats = async (estudiante_id, sesion_id, executor = db) => {
+  const eventos = await executor('eventos_sesion')
     .join('tipos_evento', 'tipos_evento.id_tipo_evento', 'eventos_sesion.tipo_evento_id')
     .where('eventos_sesion.sesion_id', sesion_id)
     .whereNotNull('eventos_sesion.habilidad_id')
@@ -159,7 +159,7 @@ export const actualizarStats = async (estudiante_id, sesion_id) => {
     const total_intentos = skillStats.aciertos + skillStats.errores;
     const promedio_reaccion_ms = calculateAverageReaction(skillStats.tiempos);
 
-    const existing = await db('estadisticas_habilidad')
+    const existing = await executor('estadisticas_habilidad')
       .where({ estudiante_id, habilidad_id })
       .first();
 
@@ -169,7 +169,7 @@ export const actualizarStats = async (estudiante_id, sesion_id) => {
         ? ((skillStats.aciertos / total_intentos) * 100).toFixed(2)
         : '0.00';
 
-      await db('estadisticas_habilidad').insert({
+      await executor('estadisticas_habilidad').insert({
         estudiante_id,
         habilidad_id,
         total_intentos,
@@ -203,7 +203,7 @@ export const actualizarStats = async (estudiante_id, sesion_id) => {
           )
         : promedio_reaccion_ms ?? existing.promedio_reaccion_ms;
 
-    await db('estadisticas_habilidad')
+    await executor('estadisticas_habilidad')
       .where({ id_estadistica: existing.id_estadistica })
       .update({
         total_intentos: nuevo_total_intentos,
@@ -211,7 +211,7 @@ export const actualizarStats = async (estudiante_id, sesion_id) => {
         errores: nuevos_errores,
         precision_pct,
         promedio_reaccion_ms: promedio_acumulado,
-        actualizado_en: db.fn.now(),
+        actualizado_en: executor.fn.now(),
       });
   }
 };

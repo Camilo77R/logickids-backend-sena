@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { env } from "./config/env.js";
+import { corsOriginHandler } from "./config/cors.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger.js";
@@ -14,18 +15,15 @@ import logrosRoutes from "./routes/logros.routes.js";
 import estadisticasRoutes from "./routes/estadisticas.routes.js";
 import recomendacionesRoutes from "./routes/recomendaciones.routes.js";
 import minijuegosRoutes from "./routes/minijuegos.routes.js";
+import { buildCodigoEstelarMobileDebugPage } from "./debug/codigoEstelarMobilePage.js";
 
 
 import adminRoutes from "./routes/admin.routes.js";
 const app = express();
 
-const allowedOrigins = env.CORS_ORIGIN.split(",").map((o) => o.trim());
 app.use(
     cors({
-        origin: (origin, cb) =>
-            !origin || allowedOrigins.includes(origin)
-                ? cb(null, true)
-                : cb(new Error("CORS bloqueado")),
+        origin: corsOriginHandler,
         credentials: true,
     }),
 );
@@ -35,6 +33,16 @@ app.use(express.json());
 if (env.NODE_ENV !== "production") {
     app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
     app.get("/docs.json", (_req, res) => res.json(swaggerSpec));
+    app.get("/debug/codigo-estelar-mobile", (_req, res) =>
+        res
+            .type("html")
+            .send(
+                buildCodigoEstelarMobileDebugPage({
+                    suggestedApiBaseUrl: "http://192.168.31.80:3000/api",
+                    suggestedDifficulty: 2,
+                }),
+            ),
+    );
 }
 
 app.get("/api/health", (_req, res) =>

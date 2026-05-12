@@ -41,9 +41,9 @@ export const listar = (usuario_id) =>
     .orderBy('predeterminado', 'desc')
     .orderBy('creado_en', 'asc');
 
-export const obtener = async (id_grupo, usuario_id) => {
+export const obtener = async (id_grupo, user) => {
   // Reutiliza assertGroupBelongsToUser — no duplicamos la lógica de ownership
-  const grupo = await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
+  const grupo = await assertGroupBelongsToUser(id_grupo, user);
 
   const estudiantesRaw = await db('estudiantes')
     .join('estudiante_grupo_historial as egh', function () {
@@ -72,8 +72,8 @@ export const crear = (usuario_id, institucion_id, { nombre, descripcion, predete
     .returning('*')
     .then(([g]) => toGroupDto(g));
 
-export const actualizar = async (id_grupo, usuario_id, datos) => {
-  const grupo = await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
+export const actualizar = async (id_grupo, user, datos) => {
+  const grupo = await assertGroupBelongsToUser(id_grupo, user);
   if (grupo.activo === false) {
     throw new AppError('No se puede editar un grupo archivado. Restáuralo primero.', 409);
   }
@@ -85,12 +85,12 @@ export const actualizar = async (id_grupo, usuario_id, datos) => {
   return db('grupos').where({ id_grupo }).first().then((grupo) => toGroupDto(grupo));
 };
 
-export const eliminar = async (id_grupo, usuario_id) => {
-  return archivar(id_grupo, usuario_id);
+export const eliminar = async (id_grupo, user) => {
+  return archivar(id_grupo, user);
 };
 
-export const archivar = async (id_grupo, usuario_id) => {
-  const grupo = await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
+export const archivar = async (id_grupo, user) => {
+  const grupo = await assertGroupBelongsToUser(id_grupo, user);
 
   if (grupo.activo === false) {
     throw new AppError('El grupo ya está archivado', 409);
@@ -132,8 +132,8 @@ export const archivar = async (id_grupo, usuario_id) => {
   });
 };
 
-export const restaurar = async (id_grupo, usuario_id) => {
-  const grupo = await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
+export const restaurar = async (id_grupo, user) => {
+  const grupo = await assertGroupBelongsToUser(id_grupo, user);
 
   if (grupo.activo === true) {
     throw new AppError('El grupo ya está activo', 409);
@@ -152,8 +152,8 @@ export const restaurar = async (id_grupo, usuario_id) => {
 };
 
 /** Abre o cierra la sesión para todos los estudiantes activos del grupo */
-export const toggleSesion = async (id_grupo, usuario_id, sesion_activa) => {
-  const grupo = await assertGroupBelongsToUser(id_grupo, { id: usuario_id, rol: 'tutor' });
+export const toggleSesion = async (id_grupo, user, sesion_activa) => {
+  const grupo = await assertGroupBelongsToUser(id_grupo, user);
 
   if (grupo.activo === false) {
     throw new AppError('No se puede abrir ni cerrar la clase de un grupo archivado', 409);

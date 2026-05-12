@@ -84,6 +84,19 @@ SELECT
 FROM public.habilidades WHERE nombre = 'Lógica'
 ON CONFLICT (slug) DO NOTHING;
 
+-- 10.1 MINIJUEGO OFICIAL MVP: CODIGO ESTELAR
+-- Competencia de clasificacion numerica en tiempo real por sala.
+INSERT INTO public.minijuegos (slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo)
+SELECT
+  'codigo-estelar',
+  'Código Estelar',
+  'Clasifica meteoritos comparando números con un objetivo central en una sala competitiva en tiempo real.',
+  id_habilidad,
+  4,
+  true
+FROM public.habilidades WHERE nombre = 'Lógica'
+ON CONFLICT (slug) DO NOTHING;
+
 -- 11. SUPERADMIN INICIAL
 -- Contraseña: SuperAdmin2025! (cambiar en producción)
 -- Hash generado con bcrypt, costo 10.
