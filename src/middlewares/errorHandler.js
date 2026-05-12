@@ -1,10 +1,11 @@
 import { ZodError } from 'zod';
 
 export class AppError extends Error {
-  constructor(message, statusCode = 500) {
+  constructor(message, statusCode = 500, extra = null) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = true;
+    this.extra = extra;  // <--- NUEVO: permite datos adicionales
     Error.captureStackTrace(this, this.constructor);
   }
 }
@@ -28,7 +29,12 @@ export const errorHandler = (err, _req, res, _next) => {
 
   // Errores operacionales controlados (AppError)
   if (err.isOperational) {
-    return res.status(err.statusCode).json({ success: false, message: err.message });
+    // Enviar respuesta con datos extra si existen
+    return res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+      ...(err.extra && { ...err.extra })  // <--- NUEVO: incluye datos extra (ej: estado, email)
+    });
   }
 
   // Errores inesperados — no exponer detalles al cliente

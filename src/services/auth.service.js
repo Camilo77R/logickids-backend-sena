@@ -103,8 +103,16 @@ export const login = async ({ email, contrasena }) => {
   const valid = await bcrypt.compare(contrasena, user.contrasena_hash);
   if (!valid) throw new AppError('Credenciales incorrectas', 401);
 
+  // ==========================================================
+  // MODIFICACIÓN: Diferenciar entre inactivo y suspendido
+  // ==========================================================
   if (user.estado !== 'activo') {
-    throw new AppError('Cuenta suspendida o inactiva', 403);
+    // Si el usuario está suspendido (estado = 'suspendido')
+    if (user.estado === 'suspendido') {
+      throw new AppError('Cuenta suspendida', 403, { estado: 'suspendido', email: user.email });
+    }
+    // Si está inactivo (tutor recién registrado)
+    throw new AppError('Cuenta inactiva. Contacta al administrador para activarla.', 403);
   }
 
   assertInstitutionActiveForLogin(user);

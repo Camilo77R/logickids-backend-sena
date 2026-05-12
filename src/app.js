@@ -16,9 +16,9 @@ import estadisticasRoutes from "./routes/estadisticas.routes.js";
 import recomendacionesRoutes from "./routes/recomendaciones.routes.js";
 import minijuegosRoutes from "./routes/minijuegos.routes.js";
 import { buildCodigoEstelarMobileDebugPage } from "./debug/codigoEstelarMobilePage.js";
-
-
 import adminRoutes from "./routes/admin.routes.js";
+import solicitudRoutes from "./routes/solicitudRoutes.js";
+
 const app = express();
 
 app.use(
@@ -65,8 +65,11 @@ app.use("/api/logros", logrosRoutes);
 app.use("/api/estadisticas", estadisticasRoutes);
 app.use("/api/recomendaciones", recomendacionesRoutes);
 app.use("/api/minijuegos", minijuegosRoutes);
+app.use("/api/solicitudes", solicitudRoutes);
+
 app.use((_req, res) =>
     res.status(404).json({ success: false, message: "Ruta no encontrada" }),
 );
 app.use(errorHandler);
+
 export default app;
