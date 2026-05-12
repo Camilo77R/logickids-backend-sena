@@ -250,6 +250,36 @@ CREATE TABLE IF NOT EXISTS public.usuarios
     CONSTRAINT usuarios_email_key UNIQUE (email)
 );
 
+CREATE TABLE IF NOT EXISTS public.solicitudes_reactivacion
+(
+    id_solicitud integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    usuario_id integer NOT NULL,
+    correo_contacto character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    motivo text COLLATE pg_catalog."default" NOT NULL,
+    descripcion text COLLATE pg_catalog."default",
+    estado_solicitud character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'pendiente'::character varying,
+    respuesta_admin text COLLATE pg_catalog."default",
+    leida_admin boolean NOT NULL DEFAULT false,
+    fecha_solicitud timestamp without time zone NOT NULL DEFAULT now(),
+    fecha_respuesta timestamp without time zone,
+    CONSTRAINT solicitudes_reactivacion_pkey PRIMARY KEY (id_solicitud),
+    CONSTRAINT chk_estado_solicitud CHECK (estado_solicitud::text = ANY (ARRAY['pendiente'::character varying, 'aprobado'::character varying, 'rechazado'::character varying]::text[])),
+    CONSTRAINT chk_respuesta_admin CHECK ((estado_solicitud::text = 'rechazado'::text AND respuesta_admin IS NOT NULL AND respuesta_admin <> ''::text) OR estado_solicitud::text <> 'rechazado'::text),
+    CONSTRAINT chk_fecha_respuesta CHECK ((estado_solicitud::text = ANY (ARRAY['aprobado'::character varying, 'rechazado'::character varying]::text[])) AND fecha_respuesta IS NOT NULL OR estado_solicitud::text = 'pendiente'::text),
+    CONSTRAINT fk_solicitudes_usuario FOREIGN KEY (usuario_id)
+        REFERENCES public.usuarios (id_usuario) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_usuario
+    ON public.solicitudes_reactivacion(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_estado
+    ON public.solicitudes_reactivacion(estado_solicitud);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_leida
+    ON public.solicitudes_reactivacion(leida_admin);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_fecha
+    ON public.solicitudes_reactivacion(fecha_solicitud DESC);
+
 ALTER TABLE IF EXISTS public.estadisticas_habilidad
     ADD CONSTRAINT estadisticas_habilidad_estudiante_id_fkey FOREIGN KEY (estudiante_id)
     REFERENCES public.estudiantes (id_estudiante) MATCH SIMPLE
