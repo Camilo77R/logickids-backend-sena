@@ -14,9 +14,9 @@ import logrosRoutes from "./routes/logros.routes.js";
 import estadisticasRoutes from "./routes/estadisticas.routes.js";
 import recomendacionesRoutes from "./routes/recomendaciones.routes.js";
 import minijuegosRoutes from "./routes/minijuegos.routes.js";
-import adminRoutes from "./routes/admin.routes.js";
-import solicitudRoutes from "./routes/solicitudRoutes.js";  // <--- NUEVA
 
+
+import adminRoutes from "./routes/admin.routes.js";
 const app = express();
 
 const allowedOrigins = env.CORS_ORIGIN.split(",").map((o) => o.trim());
@@ -57,11 +57,8 @@ app.use("/api/logros", logrosRoutes);
 app.use("/api/estadisticas", estadisticasRoutes);
 app.use("/api/recomendaciones", recomendacionesRoutes);
 app.use("/api/minijuegos", minijuegosRoutes);
-app.use("/api/solicitudes", solicitudRoutes);  // <--- NUEVA
-
 app.use((_req, res) =>
     res.status(404).json({ success: false, message: "Ruta no encontrada" }),
 );
 app.use(errorHandler);
-
 export default app;
