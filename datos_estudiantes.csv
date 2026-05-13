@@ -1,0 +1,13 @@
+estudiante_id,nombre_estudiante,edad,grupo_id,nombre_grupo,habilidad,total_intentos,aciertos,errores,precision_porcentaje,tiempo_reaccion_ms,fecha_evaluacion,nivel_logro,recomendacion_manual
+101,Ana Pérez,8,1,Grupo A,Lógica,30,25,5,83.33,450,2026-05-01,Avanzado,Seguir practicando secuencias
+101,Ana Pérez,8,1,Grupo A,Memoria,20,12,8,60.00,520,2026-05-01,Intermedio,Necesita mejorar memoria visual
+101,Ana Pérez,8,1,Grupo A,Atención,25,22,3,88.00,380,2026-05-01,Avanzado,Mantener nivel
+102,Luis Gómez,9,1,Grupo A,Lógica,35,21,14,60.00,580,2026-05-01,Intermedio,Trabajar en razonamiento lógico
+102,Luis Gómez,9,1,Grupo A,Memoria,18,14,4,77.78,490,2026-05-01,Intermedio,Continuar así
+102,Luis Gómez,9,1,Grupo A,Atención,28,20,8,71.43,420,2026-05-01,Intermedio,Mejorar concentración
+103,Carlos Ruiz,7,2,Grupo B,Lógica,15,12,3,80.00,500,2026-05-02,Intermedio,Buen nivel
+103,Carlos Ruiz,7,2,Grupo B,Memoria,12,8,4,66.67,480,2026-05-02,Básico,Necesita práctica diaria de memoria
+104,Valentina Díaz,9,2,Grupo B,Razonamiento,40,35,5,87.50,400,2026-05-02,Avanzado,Excelente razonamiento
+104,Valentina Díaz,9,2,Grupo B,Velocidad,35,28,7,80.00,350,2026-05-02,Avanzado,Mantener velocidad de procesamiento
+105,Samuel López,10,3,Grupo C,Lógica,50,30,20,60.00,550,2026-05-03,Intermedio,Fortalecer lógica básica
+105,Samuel López,10,3,Grupo C,Memoria,40,25,15,62.50,510,2026-05-03,Intermedio,Memoria a corto plazo por mejorar

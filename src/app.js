@@ -5,6 +5,7 @@ import { env } from "./config/env.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger.js";
+import iaRoutes from './routes/ia.routes.js';
 
 import authRoutes from "./routes/auth.routes.js";
 import gruposRoutes from "./routes/grupos.routes.js";
@@ -57,6 +58,8 @@ app.use("/api/logros", logrosRoutes);
 app.use("/api/estadisticas", estadisticasRoutes);
 app.use("/api/recomendaciones", recomendacionesRoutes);
 app.use("/api/minijuegos", minijuegosRoutes);
+app.use("/api/ia", iaRoutes);
+
 app.use((_req, res) =>
     res.status(404).json({ success: false, message: "Ruta no encontrada" }),
 );
