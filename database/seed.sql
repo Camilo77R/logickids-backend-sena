@@ -250,7 +250,7 @@ ON CONFLICT (estudiante_id, habilidad_id) DO UPDATE SET
 INSERT INTO public.logros (estudiante_id, catalogo_logro_id, desbloqueado_en)
 SELECT
   e.id_estudiante,
-  cl.id_logro,
+  cl.id_catalogo_logro,
   CURRENT_TIMESTAMP - INTERVAL '1 hour'
 FROM public.estudiantes e, public.catalogo_logros cl
 WHERE e.nombre = 'Ana García' AND cl.clave = 'precision_90'
@@ -261,8 +261,8 @@ INSERT INTO public.recomendaciones (estudiante_id, habilidad_id, severidad_id, m
 SELECT
   e.id_estudiante,
   h.id_habilidad,
-  ns.id_nivel,
-  mia.id_modelo,
+  ns.id_nivel_severidad,
+  mia.id_modelo_ia,
   'Ana muestra buena comprensión de secuencias lógicas con una precisión del 83%. Recomiendo continuar practicando con niveles de dificultad media para mantener el engagement.',
   83.33,
   CURRENT_TIMESTAMP,

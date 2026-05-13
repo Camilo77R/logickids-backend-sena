@@ -403,3 +403,196 @@ Todos los endpoints usan el mismo formato:
 | Superadmin | superadmin@logickids.dev | SuperAdmin2025! |
 
 > IMPORTANTE: Cambiar la contrasena del superadmin antes de desplegar a produccion.
+
+---
+
+## Base de datos en Railway (PostgreSQL en la nube)
+
+### Como funciona la conexion (concepto clave)
+
+Railway aloja una base de datos PostgreSQL en sus servidores. Para conectarte desde
+tu PC usas `psql` — el cliente oficial de PostgreSQL — que actua como "mensajero":
+toma tus archivos SQL y los envia a Railway a traves de internet.
+
+```
+Tu PC                            Internet                   Railway (nube)
+┌──────────────────┐                                     ┌───────────────┐
+│  psql.exe        │  ──── "ejecuta este .sql" ──────>   │  PostgreSQL   │
+│  + schema.sql    │  <─── "COMMIT, todo OK"  ────────   │  en Railway   │
+│  + seed.sql      │                                     │               │
+└──────────────────┘                                     └───────────────┘
+```
+
+Esto significa que **no necesitas PostgreSQL corriendo en tu PC** para que el
+backend funcione. Solo necesitas:
+1. El archivo `psql.exe` (para sincronizar la DB una sola vez)
+2. La URL publica de Railway en tu `.env`
+
+> Si desinstalaras PostgreSQL de tu PC, la DB de Railway NO se borraria.
+> Railway es un servidor independiente en la nube. Solo perderia psql.exe
+> que usas para sincronizar — pero ese paso ya estaria hecho.
+
+---
+
+### La URL de conexion — como leerla
+
+```
+postgresql://  postgres  :  tu_password  @  metro.proxy.rlwy.net  :  32786  /  railway
+     │            │              │                   │                  │          │
+  protocolo    usuario       contraseña             host              puerto   nombre DB
+```
+
+Railway tiene dos URLs — solo funciona la publica desde tu PC:
+
+| Tipo | Como se ve | Funciona desde tu PC |
+|------|-----------|----------------------|
+| **Interna** | `postgres.railway.internal:5432` | ❌ Solo entre servicios de Railway |
+| **Publica** | `metro.proxy.rlwy.net:32786` | ✅ Desde cualquier lugar |
+
+Donde obtener la URL publica: Railway → tu proyecto → PostgreSQL → pestaña **"Connect"** → seccion **"Public Networking"**
+
+---
+
+### Donde esta psql en Windows
+
+```
+C:\Program Files\PostgreSQL\<version>\bin\psql.exe
+```
+
+Si no esta en el PATH (Git Bash dice `command not found`), usa la ruta completa en PowerShell:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "TU_URL" -f archivo.sql
+```
+
+---
+
+### Flujo completo para sincronizar Railway desde cero
+
+#### Paso 1 — Crear la estructura de tablas
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "TU_URL_RAILWAY" -f "database/schema.sql"
+```
+
+- Usa `CREATE TABLE IF NOT EXISTS` — nunca borra datos existentes
+- Resultado esperado: multiples `CREATE TABLE` + `COMMIT`
+
+#### Paso 2 — Revisar si las secuencias estan sucias (opcional pero importante)
+
+Esto pasa cuando Railway tenia datos anteriores que fueron borrados manualmente.
+Las secuencias de IDs quedan desfasadas (ej: empiezan en 7 en vez de 1) y el
+seed falla con error de clave foranea.
+
+Como detectarlo:
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "TU_URL_RAILWAY" -c "SELECT last_value FROM estados_usuario_id_estado_usuario_seq;"
+```
+
+Si devuelve un numero mayor a 1 y la tabla esta vacia, hay que resetear:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "TU_URL_RAILWAY" -c "
+ALTER SEQUENCE catalogo_logros_id_catalogo_logro_seq       RESTART WITH 1;
+ALTER SEQUENCE estadisticas_habilidad_id_estadistica_seq   RESTART WITH 1;
+ALTER SEQUENCE estados_estudiante_id_estado_estudiante_seq RESTART WITH 1;
+ALTER SEQUENCE estados_sesion_id_estado_sesion_seq         RESTART WITH 1;
+ALTER SEQUENCE estados_usuario_id_estado_usuario_seq       RESTART WITH 1;
+ALTER SEQUENCE estudiante_grupo_historial_id_est_grupo_seq RESTART WITH 1;
+ALTER SEQUENCE estudiantes_id_estudiante_seq               RESTART WITH 1;
+ALTER SEQUENCE eventos_sesion_id_evento_sesion_seq         RESTART WITH 1;
+ALTER SEQUENCE grupos_id_grupo_seq                         RESTART WITH 1;
+ALTER SEQUENCE habilidades_id_habilidad_seq                RESTART WITH 1;
+ALTER SEQUENCE instituciones_id_institucion_seq            RESTART WITH 1;
+ALTER SEQUENCE logros_id_logro_seq                         RESTART WITH 1;
+ALTER SEQUENCE minijuegos_id_minijuego_seq                 RESTART WITH 1;
+ALTER SEQUENCE modelos_ia_id_modelo_ia_seq                 RESTART WITH 1;
+ALTER SEQUENCE niveles_severidad_id_nivel_severidad_seq    RESTART WITH 1;
+ALTER SEQUENCE recomendaciones_id_recomendacion_seq        RESTART WITH 1;
+ALTER SEQUENCE roles_id_rol_seq                            RESTART WITH 1;
+ALTER SEQUENCE sesiones_juego_id_sesion_juego_seq          RESTART WITH 1;
+ALTER SEQUENCE solicitudes_reactivacion_id_solicitud_seq   RESTART WITH 1;
+ALTER SEQUENCE tipos_evento_id_tipo_evento_seq             RESTART WITH 1;
+ALTER SEQUENCE usuarios_id_usuario_seq                     RESTART WITH 1;
+"
+```
+
+Por que existe este problema: PostgreSQL lleva un contador interno por tabla para
+generar IDs. Cuando borras filas, el contador NO vuelve atras. Si el seed
+inserta estados con IDs 7,8,9 en vez de 1,2,3, el superadmin con
+`estado_id=1` falla porque ese estado no existe.
+
+#### Paso 3 — Insertar datos base
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "TU_URL_RAILWAY" -f "database/seed.sql"
+```
+
+- Idempotente (`ON CONFLICT DO NOTHING`) — se puede correr multiples veces sin duplicar
+- Resultado esperado: ~22 lineas `INSERT 0 X` + `COMMIT`
+
+#### Paso 4 — Aplicar migraciones (en orden cronologico)
+
+```powershell
+# Migracion 1
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "TU_URL_RAILWAY" `
+  -f "database/migrations/20260509_create_solicitudes_reactivacion_table.sql"
+
+# Migracion 2 (requiere seed aplicado primero)
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "TU_URL_RAILWAY" `
+  -f "database/migrations/2026-05-11_add_codigo_estelar_minijuego.sql"
+```
+
+> Los mensajes `NOTICE: relation already exists, skipping` NO son errores.
+> Significan que la tabla ya fue creada por el schema y la migracion lo detecta.
+
+#### Paso 5 — Verificar que todo quedo bien
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "TU_URL_RAILWAY" -c "
+SELECT 'roles'           AS tabla, COUNT(*) FROM roles
+UNION ALL SELECT 'usuarios',        COUNT(*) FROM usuarios
+UNION ALL SELECT 'habilidades',     COUNT(*) FROM habilidades
+UNION ALL SELECT 'minijuegos',      COUNT(*) FROM minijuegos
+UNION ALL SELECT 'estados_usuario', COUNT(*) FROM estados_usuario;
+"
+```
+
+Resultado esperado: roles=3, usuarios=2, habilidades=5, minijuegos=2, estados_usuario=3
+
+---
+
+### Configurar el .env para apuntar a Railway
+
+```env
+DB_HOST=metro.proxy.rlwy.net
+DB_PORT=32786
+DB_USER=postgres
+DB_PASSWORD=tu_password_de_railway
+DB_NAME=railway
+NODE_ENV=development
+```
+
+---
+
+### Cuando llegan nuevas migraciones del equipo
+
+```bash
+# 1. Traer cambios del repo
+git pull origin develop
+
+# 2. Aplicar solo la nueva migracion (NO repetir schema ni seed)
+psql "TU_URL_RAILWAY" -f database/migrations/NUEVA_MIGRACION.sql
+```
+
+---
+
+### Errores comunes y soluciones
+
+| Error | Causa | Solucion |
+|-------|-------|----------|
+| `command not found: psql` | psql no esta en PATH | Usar ruta completa del ejecutable |
+| `Key (estado_id)=(1) is not present` | Secuencias desfasadas | Resetear secuencias (Paso 2) |
+| `No existe la habilidad Logica` | Seed no aplicado antes de la migracion | Aplicar seed primero |
+| `NOTICE: relation already exists` | Tabla ya existe (no es error) | Ignorar, continua normal |
+| URL interna usada desde PC | Confundir URL interna con publica | Usar URL con `rlwy.net` |
