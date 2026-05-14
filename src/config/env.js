@@ -14,6 +14,11 @@ const schema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   JWT_STUDENT_EXPIRES_IN: z.string().default('4h'),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  EMAIL_HOST: z.string().optional(),
+  EMAIL_PORT: z.coerce.number().optional(),
+  EMAIL_USER: z.string().optional(),
+  EMAIL_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
 });
 

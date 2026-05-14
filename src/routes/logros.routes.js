@@ -1,14 +1,16 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/logros.controller.js';
-import { requireAuth, requireEstudiante } from '../middlewares/auth.js';
-import { validate } from '../middlewares/validate.js';
-import { desbloquearLogroSchema } from '../schemas/logros.schema.js';
+import { attachOptionalSession, requireAuth, requireEstudiante, requireRole } from '../middlewares/auth.js';
 
 const router = Router();
-router.get('/catalogo', ctrl.catalogo);
+
+// Catálogo público — cualquiera puede ver qué logros existen
+router.get('/catalogo', attachOptionalSession, ctrl.catalogo);
+
+// Rutas del estudiante autenticado
 router.get('/mis-logros', requireEstudiante, ctrl.misLogros);
-router.get('/estudiante/:id', requireAuth, ctrl.listar);
-router.post('/desbloquear', requireEstudiante, validate(desbloquearLogroSchema), ctrl.desbloquear);
-router.post('/estudiante/:id', requireEstudiante, validate(desbloquearLogroSchema), ctrl.desbloquear);
+
+// Rutas del tutor — ver logros de un estudiante específico
+router.get('/estudiante/:id', requireAuth, requireRole('tutor'), ctrl.listar);
 
 export default router;

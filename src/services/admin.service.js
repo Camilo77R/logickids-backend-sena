@@ -1,125 +1,327 @@
 import { db } from '../config/db.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 
-class AdminService {
-  // --- USUARIOS WEB ---
-  async listarUsuarios() {
-    return db('usuarios')
-      .join('roles', 'usuarios.rol_id', 'roles.id_rol')
-      .join('estados_usuario', 'usuarios.estado_id', 'estados_usuario.id_estado_usuario')
-      .leftJoin('instituciones', 'usuarios.institucion_id', 'instituciones.id_institucion')
-      .select(
-        'usuarios.id_usuario as id', 'usuarios.nombre', 'usuarios.email', 'usuarios.creado_en',
-        'roles.nombre as rol',
-        'estados_usuario.nombre as estado',
-        'instituciones.nombre as institucion'
-      )
-      .orderBy('usuarios.creado_en', 'desc');
-  }
+// --- USUARIOS WEB ---
 
-  async obtenerUsuario(id_usuario) {
-    const user = await db('usuarios')
-      .join('roles', 'usuarios.rol_id', 'roles.id_rol')
-      .join('estados_usuario', 'usuarios.estado_id', 'estados_usuario.id_estado_usuario')
-      .leftJoin('instituciones', 'usuarios.institucion_id', 'instituciones.id_institucion')
-      .where('usuarios.id_usuario', id_usuario)
-      .select(
-        'usuarios.id_usuario as id',
-        'usuarios.nombre',
-        'usuarios.email',
-        'usuarios.creado_en',
-        'usuarios.actualizado_en',
-        'roles.nombre as rol',
-        'estados_usuario.nombre as estado',
-        'instituciones.nombre as institucion',
-        'instituciones.ciudad as institucion_ciudad'
-      )
-      .first();
+export const listarUsuarios = (institucion_id) =>
+  db('usuarios')
+    .join('roles', 'usuarios.rol_id', 'roles.id_rol')
+    .join('estados_usuario', 'usuarios.estado_id', 'estados_usuario.id_estado_usuario')
+    .leftJoin('instituciones', 'usuarios.institucion_id', 'instituciones.id_institucion')
+    .where('usuarios.institucion_id', institucion_id)
+    .where('roles.nombre', 'tutor')
+    .select(
+      'usuarios.id_usuario as id',
+      'usuarios.nombre',
+      'usuarios.email',
+      'usuarios.creado_en',
+      'roles.nombre as rol',
+      'estados_usuario.nombre as estado',
+      'instituciones.nombre as institucion'
+    )
+    .orderBy('usuarios.creado_en', 'desc');
 
-    if (!user) {
-      throw new AppError('Usuario no encontrado', 404);
+export const obtenerUsuario = async (id_usuario, admin) => {
+  const user = await db('usuarios')
+    .join('roles', 'usuarios.rol_id', 'roles.id_rol')
+    .join('estados_usuario', 'usuarios.estado_id', 'estados_usuario.id_estado_usuario')
+    .leftJoin('instituciones', 'usuarios.institucion_id', 'instituciones.id_institucion')
+    .where('usuarios.id_usuario', id_usuario)
+    .select(
+      'usuarios.id_usuario as id',
+      'usuarios.nombre',
+      'usuarios.email',
+      'usuarios.institucion_id',
+      'usuarios.creado_en',
+      'usuarios.actualizado_en',
+      'roles.nombre as rol',
+      'estados_usuario.nombre as estado',
+      'instituciones.nombre as institucion',
+      'instituciones.ciudad as institucion_ciudad'
+    )
+    .first();
+
+  if (!user) throw new AppError('Usuario no encontrado', 404);
+
+  if (admin.rol === 'admin') {
+    if (user.institucion_id !== admin.institucion_id) {
+      throw new AppError('No tienes permisos para ver usuarios de otra institución', 403);
     }
 
-    return user;
+    if (user.rol !== 'tutor') {
+      throw new AppError('El admin solo puede consultar tutores', 403);
+    }
   }
 
-  async cambiarEstadoUsuario(id_usuario, estado_nombre) {
-    const estado = await db('estados_usuario').where({ nombre: estado_nombre }).select('id_estado_usuario').first();
-    if (!estado) throw new AppError('Estado no válido. Use: activo | inactivo | suspendido', 400);
+  return user;
+};
 
-    await db('usuarios')
-      .where({ id_usuario })
-      .update({ estado_id: estado.id_estado_usuario, actualizado_en: db.fn.now() });
+/**
+ * Cambia el estado de un tutor. El admin solo puede modificar tutores
+ * de su misma institución para evitar escalada de privilegios cross-tenant.
+ */
+export const cambiarEstadoUsuario = async (id_usuario, estado_nombre, admin) => {
+  const objetivo = await db('usuarios')
+    .join('roles', 'usuarios.rol_id', 'roles.id_rol')
+    .where('usuarios.id_usuario', id_usuario)
+    .select('usuarios.institucion_id', 'roles.nombre as rol')
+    .first();
 
-    return { id: id_usuario, estado: estado_nombre };
+  if (!objetivo) throw new AppError('Usuario no encontrado', 404);
+
+  if (admin.rol === 'admin') {
+    if (objetivo.institucion_id !== admin.institucion_id) {
+      throw new AppError('No tienes permisos para modificar usuarios de otra institución', 403);
+    }
+    if (objetivo.rol !== 'tutor') {
+      throw new AppError('El admin solo puede gestionar tutores', 403);
+    }
   }
 
-  // --- INSTITUCIONES ---
-  async listarInstituciones() {
-    return db('instituciones')
-      .select(
-        'id_institucion as id',
-        'nombre',
-        'ciudad',
-        'direccion',
-        'telefono',
-        'creado_en'
-      )
-      .orderBy('nombre', 'asc');
+  const estado = await db('estados_usuario')
+    .where({ nombre: estado_nombre })
+    .select('id_estado_usuario')
+    .first();
+  if (!estado) throw new AppError('Estado no válido. Use: activo | inactivo | suspendido', 400);
+
+  await db('usuarios')
+    .where({ id_usuario })
+    .update({ estado_id: estado.id_estado_usuario, actualizado_en: db.fn.now() });
+
+  return { id: id_usuario, estado: estado_nombre };
+};
+
+// --- INSTITUCIONES ---
+
+const buildInstitucionesQuery = () =>
+  db('instituciones')
+    .leftJoin('usuarios as u', function () {
+      this.on('u.institucion_id', 'instituciones.id_institucion')
+        .andOnVal('u.estado_id', '=', db.raw(
+          '(SELECT id_estado_usuario FROM estados_usuario WHERE nombre = ?)', ['activo']
+        ));
+    })
+    .leftJoin('roles as r', function () {
+      this.on('r.id_rol', 'u.rol_id')
+        .andOnVal('r.nombre', '=', 'tutor');
+    })
+    .groupBy('instituciones.id_institucion')
+    .select(
+      'instituciones.id_institucion as id',
+      'instituciones.nombre',
+      'instituciones.ciudad',
+      'instituciones.direccion',
+      'instituciones.telefono',
+      'instituciones.activo',
+      'instituciones.desactivado_en',
+      'instituciones.creado_en',
+      db.raw('COUNT(r.id_rol) as tutores_activos')
+    );
+
+export const listarInstituciones = ({ estado = 'todas' } = {}) => {
+  const query = buildInstitucionesQuery();
+
+  if (estado === 'activas') {
+    query.where('instituciones.activo', true);
+  } else if (estado === 'desactivadas') {
+    query.where('instituciones.activo', false);
+  } else if (estado !== 'todas') {
+    throw new AppError('Filtro de estado no válido. Use: activas | desactivadas | todas', 400);
   }
 
-  async crearInstitucion({ nombre, ciudad, direccion, telefono }) {
-    const exists = await db('instituciones').where({ nombre }).first();
-    if (exists) throw new AppError('Ya existe una institución con ese nombre', 409);
+  return query.orderBy([
+    { column: 'instituciones.activo', order: 'desc' },
+    { column: 'instituciones.nombre', order: 'asc' },
+  ]);
+};
 
-    const [inst] = await db('instituciones')
+export const crearInstitucion = async ({ nombre, ciudad, direccion, telefono }) => {
+  const exists = await db('instituciones').where({ nombre }).first();
+  if (exists) throw new AppError('Ya existe una institución con ese nombre', 409);
+
+  return db.transaction(async (trx) => {
+    const [inst] = await trx('instituciones')
       .insert({ nombre, ciudad, direccion, telefono })
       .returning('*');
+
+    const rol = await trx('roles').where({ nombre: 'admin' }).select('id_rol').first();
+
+    // Contraseña temporal aleatoria y segura — nunca hardcodeada
+    const contrasena_temp = crypto.randomBytes(8).toString('hex');
+    const contrasena_hash = await bcrypt.hash(contrasena_temp, 10);
+    const emailAdmin = `admin.${nombre.toLowerCase().replace(/\s+/g, '')}@logickids.dev`;
+
+    const [usuario] = await trx('usuarios')
+      .insert({
+        nombre: `Admin ${nombre}`,
+        email: emailAdmin,
+        contrasena_hash,
+        rol_id: rol.id_rol,
+        institucion_id: inst.id_institucion,
+        estado_id: 1,
+      })
+      .returning('*');
+
     return {
-      id: inst.id_institucion,
-      nombre: inst.nombre,
-      ciudad: inst.ciudad,
-      direccion: inst.direccion,
-      telefono: inst.telefono,
-      creado_en: inst.creado_en,
+      institucion: {
+        id: inst.id_institucion,
+        nombre: inst.nombre,
+        ciudad: inst.ciudad,
+      },
+      admin: {
+        email: usuario.email,
+        contrasena_temporal: contrasena_temp,
+      },
     };
+  });
+};
+
+export const eliminarInstitucion = async (id_institucion) => {
+  return desactivarInstitucion(id_institucion);
+};
+
+export const desactivarInstitucion = async (id_institucion) => {
+  const institution = await db('instituciones')
+    .where({ id_institucion })
+    .select('id_institucion', 'activo')
+    .first();
+
+  if (!institution) {
+    throw new AppError('Institución no encontrada', 404);
   }
 
-  async eliminarInstitucion(id_institucion) {
-    const conUsuarios = await db('usuarios').where({ institucion_id: id_institucion }).first();
-    if (conUsuarios) throw new AppError('No se puede eliminar: tiene tutores asociados', 409);
-
-    const deleted = await db('instituciones').where({ id_institucion }).delete();
-    if (!deleted) throw new AppError('Institución no encontrada', 404);
+  if (institution.activo === false) {
+    throw new AppError('La institución ya está desactivada', 409);
   }
 
-  // --- MINIJUEGOS ---
-  async listarMinijuegosAdmin() {
-    return db('minijuegos')
-      .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
-      .select(
-        'minijuegos.id_minijuego as id',
-        'minijuegos.slug',
-        'minijuegos.titulo',
-        'minijuegos.descripcion',
-        'minijuegos.dificultad_maxima',
-        'minijuegos.activo',
-        'minijuegos.creado_en',
-        'habilidades.nombre as habilidad'
-      )
-      .orderBy('minijuegos.titulo', 'asc');
+  return db.transaction(async (trx) => {
+    await trx('estudiantes')
+      .where({ institucion_id: id_institucion })
+      .update({ sesion_activa: false, actualizado_en: trx.fn.now() });
+
+    const [updated] = await trx('instituciones')
+      .where({ id_institucion })
+      .update({
+        activo: false,
+        desactivado_en: trx.fn.now(),
+      })
+      .returning([
+        'id_institucion as id',
+        'nombre',
+        'activo',
+        'desactivado_en',
+      ]);
+
+    return updated;
+  });
+};
+
+export const reactivarInstitucion = async (id_institucion) => {
+  const institution = await db('instituciones')
+    .where({ id_institucion })
+    .select('id_institucion', 'activo')
+    .first();
+
+  if (!institution) {
+    throw new AppError('Institución no encontrada', 404);
   }
 
-  async toggleMinijuego(id_minijuego, activo) {
-    const updated = await db('minijuegos')
-      .where({ id_minijuego })
-      .update({ activo })
-      .returning(['id_minijuego as id', 'activo']);
-
-    const row = updated?.[0];
-    if (!row) throw new AppError('Minijuego no encontrado', 404);
-    return row;
+  if (institution.activo === true) {
+    throw new AppError('La institución ya está activa', 409);
   }
-}
 
-export default new AdminService();
+  const [updated] = await db('instituciones')
+    .where({ id_institucion })
+    .update({
+      activo: true,
+      desactivado_en: null,
+    })
+    .returning([
+      'id_institucion as id',
+      'nombre',
+      'activo',
+      'desactivado_en',
+    ]);
+
+  return updated;
+};
+
+/**
+ * Actualiza los datos de una institución existente.
+ * Solo el superadmin puede ejecutar esta operación.
+ * Usa un allowlist de campos para evitar ataques de mass-assignment.
+ *
+ * @param {number} id_institucion - ID de la institución a modificar
+ * @param {object} datos - Campos permitidos: nombre, ciudad, direccion, telefono
+ * @returns {object} Institución actualizada
+ */
+export const actualizarInstitucion = async (id_institucion, datos) => {
+  // Allowlist: solo campos permitidos llegan a la BD
+  const CAMPOS_PERMITIDOS = ['nombre', 'ciudad', 'direccion', 'telefono'];
+  const updates = Object.fromEntries(
+    Object.entries(datos).filter(([k]) => CAMPOS_PERMITIDOS.includes(k))
+  );
+
+  if (!Object.keys(updates).length) {
+    throw new AppError('No se proporcionaron campos válidos para actualizar', 400);
+  }
+
+  // Verifica que la institución exista antes de modificarla
+  const existente = await db('instituciones').where({ id_institucion }).first();
+  if (!existente) throw new AppError('Institución no encontrada', 404);
+
+  // Previene conflicto de nombre duplicado con OTRA institución
+  if (updates.nombre && updates.nombre !== existente.nombre) {
+    const duplicado = await db('instituciones')
+      .where({ nombre: updates.nombre })
+      .whereNot({ id_institucion })
+      .first();
+    if (duplicado) throw new AppError('Ya existe una institución con ese nombre', 409);
+  }
+
+  const [actualizada] = await db('instituciones')
+    .where({ id_institucion })
+    .update(updates)
+    .returning([
+      'id_institucion as id',
+      'nombre',
+      'ciudad',
+      'direccion',
+      'telefono',
+      'activo',
+      'desactivado_en',
+      'creado_en',
+    ]);
+
+  return actualizada;
+};
+
+// --- MINIJUEGOS ---
+
+export const listarMinijuegosAdmin = () =>
+  db('minijuegos')
+    .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
+    .select(
+      'minijuegos.id_minijuego as id',
+      'minijuegos.slug',
+      'minijuegos.titulo',
+      'minijuegos.descripcion',
+      'minijuegos.dificultad_maxima',
+      'minijuegos.activo',
+      'minijuegos.creado_en',
+      'habilidades.nombre as habilidad'
+    )
+    .orderBy('minijuegos.titulo', 'asc');
+
+export const toggleMinijuego = async (id_minijuego, activo) => {
+  const updated = await db('minijuegos')
+    .where({ id_minijuego })
+    .update({ activo })
+    .returning(['id_minijuego as id', 'activo']);
+
+  const row = updated?.[0];
+  if (!row) throw new AppError('Minijuego no encontrado', 404);
+  return row;
+};

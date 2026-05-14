@@ -24,8 +24,7 @@ export const registroSchema = z.object({
   institucion_id: z
     .number()
     .int('El ID de la institución debe ser un número entero')
-    .positive('El ID de la institución debe ser positivo')
-    .optional(),
+    .positive('El ID de la institución debe ser positivo'),
 });
 
 /** POST /api/auth/login */
@@ -50,12 +49,6 @@ export const actualizarPerfilSchema = z
       .min(2, 'El nombre debe tener al menos 2 caracteres')
       .max(100, 'El nombre no puede superar 100 caracteres')
       .optional(),
-
-    institucion_id: z
-      .number()
-      .int('El ID de la institución debe ser un número entero')
-      .positive('El ID de la institución debe ser positivo')
-      .optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Debes proporcionar al menos un campo para actualizar',
@@ -69,6 +62,6 @@ export const cambiarContrasenaSchema = z.object({
 
   contrasena_nueva: z
     .string({ required_error: 'La nueva contraseña es obligatoria' })
-    .min(6, 'La nueva contraseña debe tener al menos 6 caracteres')
+    .min(8, 'La nueva contraseña debe tener al menos 8 caracteres')
     .max(128, 'La nueva contraseña no puede superar 128 caracteres'),
 });

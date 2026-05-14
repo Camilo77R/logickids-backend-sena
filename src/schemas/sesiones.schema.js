@@ -54,22 +54,22 @@ export const registrarEventoSchema = z.object({
 /** POST /api/sesiones/:id/finalizar */
 export const finalizarSesionSchema = z.object({
   puntaje: z
-    .number({
-      required_error: 'El puntaje es obligatorio',
-      invalid_type_error: 'El puntaje debe ser un número',
-    })
+    .number({ invalid_type_error: 'El puntaje debe ser un número' })
     .min(0, 'El puntaje no puede ser negativo')
-    .max(10000, 'El puntaje supera el límite permitido'),
+    .max(10000, 'El puntaje supera el límite permitido')
+    .optional(),
 
   aciertos: z
-    .number({ required_error: 'Los aciertos son obligatorios', invalid_type_error: 'Los aciertos deben ser un número' })
+    .number({ invalid_type_error: 'Los aciertos deben ser un número' })
     .int()
-    .min(0, 'Los aciertos no pueden ser negativos'),
+    .min(0, 'Los aciertos no pueden ser negativos')
+    .optional(),
 
   errores: z
-    .number({ required_error: 'Los errores son obligatorios', invalid_type_error: 'Los errores deben ser un número' })
+    .number({ invalid_type_error: 'Los errores deben ser un número' })
     .int()
-    .min(0, 'Los errores no pueden ser negativos'),
+    .min(0, 'Los errores no pueden ser negativos')
+    .optional(),
 
   combo_maximo: z
     .number({ invalid_type_error: 'El combo máximo debe ser un número' })

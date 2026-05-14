@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/estudiantes.controller.js';
-import { requireAuth, requireEstudiante } from '../middlewares/auth.js';
+import { requireAuth, requireEstudiante, requireRole } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import {
   loginEstudianteSchema,
@@ -8,7 +8,6 @@ import {
   actualizarEstudianteSchema,
   cambiarGrupoEstudianteSchema,
   toggleSesionSchema,
-  toggleSesionGrupoSchema,
 } from '../schemas/estudiantes.schema.js';
 
 const router = Router();
@@ -16,10 +15,10 @@ const router = Router();
 // Rutas públicas (sin JWT de tutor)
 router.post('/login',         validate(loginEstudianteSchema),   ctrl.loginEstudiante);
 router.get('/mi-perfil',      requireEstudiante,                 ctrl.miPerfil);
-router.patch('/sesion/grupo', requireAuth, validate(toggleSesionGrupoSchema), ctrl.toggleSesionGrupo);
 
 // Rutas protegidas
 router.use(requireAuth);
+router.use(requireRole('tutor'));
 
 router.get('/',          ctrl.listar);
 router.get('/all',       ctrl.listarTodos);

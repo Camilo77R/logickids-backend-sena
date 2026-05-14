@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/sesiones.controller.js';
-import { requireAuth, requireEstudiante } from '../middlewares/auth.js';
+import { requireAuth, requireEstudiante, requireRole } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import {
   iniciarSesionSchema,
@@ -16,8 +16,8 @@ router.post('/:id/eventos',    requireEstudiante, validate(registrarEventoSchema
 router.post('/:id/finalizar',  requireEstudiante, validate(finalizarSesionSchema),  ctrl.finalizar);
 router.get('/mis-sesiones',    requireEstudiante, ctrl.miHistorial);
 
-// Rutas usadas por admin y tutores para ver historial
-router.get('/estudiante/:id',  requireAuth, ctrl.historial);
-router.get('/:id/eventos',     requireAuth, ctrl.detalleEventos);
+// Rutas usadas por el tutor para ver historial
+router.get('/estudiante/:id',  requireAuth, requireRole('tutor'), ctrl.historial);
+router.get('/:id/eventos',     requireAuth, requireRole('tutor'), ctrl.detalleEventos);
 
 export default router;
