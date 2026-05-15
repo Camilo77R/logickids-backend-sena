@@ -2,17 +2,21 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from datetime import datetime
-from analizador import AnalizadorLogicKids
+from analizador import AnalizadorLogicKids, _load_env_value
 
 app = FastAPI(title="LogicKids IA Service")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Debug al iniciar
+gemini_key = _load_env_value("GEMINI_API_KEY")
+print(f"DEBUG MAIN: GEMINI_API_KEY loaded: {bool(gemini_key)}")
 
 @app.post("/api/ia/recomendaciones")
 async def generar_recomendaciones(file: UploadFile = File(...)):
