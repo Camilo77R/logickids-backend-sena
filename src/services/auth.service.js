@@ -9,6 +9,7 @@ const USER_FIELDS = [
   'usuarios.nombre',
   'usuarios.email',
   'usuarios.institucion_id',
+  'usuarios.es_admin_principal',
   'usuarios.creado_en',
   'roles.nombre as rol',
   'estados_usuario.nombre as estado',
@@ -124,6 +125,7 @@ export const login = async ({ email, contrasena }) => {
     email: user.email,
     rol: user.rol,
     institucion_id: user.institucion_id ?? null,
+    es_admin_principal: user.es_admin_principal ?? false,
   });
 
   return { token, usuario: userData };

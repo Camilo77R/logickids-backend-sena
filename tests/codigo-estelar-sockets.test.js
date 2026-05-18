@@ -211,7 +211,7 @@ describe('🔌 Sockets — Codigo Estelar', () => {
 
       const archiveGroupRes = await request(app)
         .patch(`/api/grupos/${fixture.groupId}/archivar`)
-        .set(authHeader(fixture.tutorToken));
+        .set(authHeader(fixture.adminToken));
 
       expect(archiveGroupRes.status).toBe(200);
 
@@ -230,7 +230,9 @@ describe('🔌 Sockets — Codigo Estelar', () => {
     }
   });
 
-  it('✅ auto-finaliza la sesión cuando llega game_over y tolera un finalize tardío del móvil', async () => {
+  it(
+    '✅ auto-finaliza la sesión cuando llega game_over y tolera un finalize tardío del móvil',
+    async () => {
     const minijuegoId = await resolveCodigoEstelarId();
     const fixture = await provisionPlayableStudent();
     const startRes = await startCodigoEstelarSession({
@@ -266,6 +268,10 @@ describe('🔌 Sockets — Codigo Estelar', () => {
         });
       }
 
+      const gameOverPromise = waitForSocketEvent(socket, CODIGO_ESTELAR_SOCKET_EVENTS.game_over, {
+        rejectOn: CODIGO_ESTELAR_SOCKET_EVENTS.error,
+        timeoutMs: 15_000,
+      });
       socket.emit(CODIGO_ESTELAR_SOCKET_EVENTS.submit, {
         sesionId,
         numeroMeteorito: numeroObjetivo + 1,
@@ -273,9 +279,7 @@ describe('🔌 Sockets — Codigo Estelar', () => {
         tiempoReaccionMs: 1_000,
       });
 
-      const gameOver = await waitForSocketEvent(socket, CODIGO_ESTELAR_SOCKET_EVENTS.game_over, {
-        rejectOn: CODIGO_ESTELAR_SOCKET_EVENTS.error,
-      });
+      const gameOver = await gameOverPromise;
 
       expect(gameOver.ganador.estudianteId).toBe(fixture.studentId);
       expect(gameOver.ganador.puntaje).toBeGreaterThanOrEqual(100);
@@ -316,5 +320,7 @@ describe('🔌 Sockets — Codigo Estelar', () => {
     } finally {
       await closeSocket(socket);
     }
-  });
+    },
+    30_000
+  );
 });

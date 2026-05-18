@@ -18,17 +18,16 @@ router.get('/mi-perfil',      requireEstudiante,                 ctrl.miPerfil);
 
 // Rutas protegidas
 router.use(requireAuth);
-router.use(requireRole('tutor'));
 
-router.get('/',          ctrl.listar);
-router.get('/all',       ctrl.listarTodos);
-router.get('/:id',       ctrl.obtener);
-router.post('/',         validate(crearEstudianteSchema),        ctrl.crear);
-router.put('/:id',       validate(actualizarEstudianteSchema),   ctrl.actualizar);
-router.patch('/:id/grupo', validate(cambiarGrupoEstudianteSchema), ctrl.cambiarGrupo);
-router.delete('/:id',    ctrl.desactivar);
-router.patch('/:id/reactivar', ctrl.reactivar);
-router.get('/:id/qr',    ctrl.obtenerQr);
-router.patch('/:id/sesion', validate(toggleSesionSchema),        ctrl.toggleSesion);
+router.get('/', requireRole('admin', 'tutor'), ctrl.listar);
+router.get('/all', requireRole('admin', 'tutor'), ctrl.listarTodos);
+router.get('/:id', requireRole('admin', 'tutor'), ctrl.obtener);
+router.post('/', requireRole('admin'), validate(crearEstudianteSchema), ctrl.crear);
+router.put('/:id', requireRole('admin'), validate(actualizarEstudianteSchema), ctrl.actualizar);
+router.patch('/:id/grupo', requireRole('admin'), validate(cambiarGrupoEstudianteSchema), ctrl.cambiarGrupo);
+router.delete('/:id', requireRole('admin'), ctrl.desactivar);
+router.patch('/:id/reactivar', requireRole('admin'), ctrl.reactivar);
+router.get('/:id/qr', requireRole('admin', 'tutor'), ctrl.obtenerQr);
+router.patch('/:id/sesion', requireRole('tutor'), validate(toggleSesionSchema), ctrl.toggleSesion);
 
 export default router;

@@ -23,9 +23,10 @@ export const crearEstudianteSchema = z.object({
     .positive('La edad debe ser un número positivo'),
 
   grupo_id: z
-    .number({ required_error: 'El grupo es obligatorio', invalid_type_error: 'El ID de grupo debe ser un número' })
+    .number({ invalid_type_error: 'El ID de grupo debe ser un número' })
     .int()
-    .positive('El ID de grupo debe ser un número positivo'),
+    .positive('El ID de grupo debe ser un número positivo')
+    .optional(),
 
   color_avatar: z
     .string()

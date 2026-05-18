@@ -16,8 +16,8 @@ router.post('/:id/eventos',    requireEstudiante, validate(registrarEventoSchema
 router.post('/:id/finalizar',  requireEstudiante, validate(finalizarSesionSchema),  ctrl.finalizar);
 router.get('/mis-sesiones',    requireEstudiante, ctrl.miHistorial);
 
-// Rutas usadas por el tutor para ver historial
-router.get('/estudiante/:id',  requireAuth, requireRole('tutor'), ctrl.historial);
-router.get('/:id/eventos',     requireAuth, requireRole('tutor'), ctrl.detalleEventos);
+// Rutas usadas por adultos con alcance institucional/pedagógico
+router.get('/estudiante/:id',  requireAuth, requireRole('admin', 'tutor'), ctrl.historial);
+router.get('/:id/eventos',     requireAuth, requireRole('admin', 'tutor'), ctrl.detalleEventos);
 
 export default router;

@@ -66,6 +66,19 @@ CREATE TABLE IF NOT EXISTS public.estudiante_grupo_historial
     CONSTRAINT estudiante_grupo_historial_estudiante_id_grupo_id_fecha_ini_key UNIQUE (estudiante_id, grupo_id, fecha_inicio)
 );
 
+CREATE TABLE IF NOT EXISTS public.grupo_tutor_historial
+(
+    id_grupo_tutor integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    grupo_id integer NOT NULL,
+    tutor_id integer NOT NULL,
+    asignado_por integer NOT NULL,
+    fecha_inicio timestamp with time zone NOT NULL DEFAULT now(),
+    fecha_fin timestamp with time zone,
+    activo boolean NOT NULL DEFAULT true,
+    CONSTRAINT grupo_tutor_historial_pkey PRIMARY KEY (id_grupo_tutor),
+    CONSTRAINT grupo_tutor_historial_grupo_id_tutor_id_fecha_ini_key UNIQUE (grupo_id, tutor_id, fecha_inicio)
+);
+
 CREATE TABLE IF NOT EXISTS public.estudiantes
 (
     id_estudiante integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
@@ -99,6 +112,8 @@ CREATE TABLE IF NOT EXISTS public.grupos
 (
     id_grupo integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
     usuario_id integer NOT NULL,
+    tutor_asignado_id integer,
+    sesion_minijuego_id integer,
     nombre character varying(100) COLLATE pg_catalog."default" NOT NULL,
     descripcion character varying(255) COLLATE pg_catalog."default",
     predeterminado boolean NOT NULL DEFAULT false,
@@ -112,7 +127,7 @@ CREATE TABLE IF NOT EXISTS public.grupos
         (activo = true AND archivado_en IS NULL) OR
         (activo = false AND archivado_en IS NOT NULL)
     ),
-    CONSTRAINT grupos_usuario_id_nombre_key UNIQUE (usuario_id, nombre)
+    CONSTRAINT grupos_institucion_id_nombre_key UNIQUE (institucion_id, nombre)
 );
 
 CREATE TABLE IF NOT EXISTS public.habilidades
@@ -244,6 +259,7 @@ CREATE TABLE IF NOT EXISTS public.usuarios
     rol_id integer NOT NULL,
     institucion_id integer,
     estado_id integer NOT NULL DEFAULT 1,
+    es_admin_principal boolean NOT NULL DEFAULT false,
     creado_en timestamp with time zone NOT NULL DEFAULT now(),
     actualizado_en timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT usuarios_pkey PRIMARY KEY (id_usuario),
@@ -314,6 +330,34 @@ ALTER TABLE IF EXISTS public.estudiante_grupo_historial
     ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_egh_grupo
     ON public.estudiante_grupo_historial(grupo_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_grupo_un_tutor_activo
+    ON public.grupo_tutor_historial(grupo_id)
+    WHERE activo = true AND fecha_fin IS NULL;
+CREATE INDEX IF NOT EXISTS idx_gth_tutor
+    ON public.grupo_tutor_historial(tutor_id);
+CREATE INDEX IF NOT EXISTS idx_gth_asignado_por
+    ON public.grupo_tutor_historial(asignado_por);
+
+
+ALTER TABLE IF EXISTS public.grupo_tutor_historial
+    ADD CONSTRAINT grupo_tutor_historial_grupo_id_fkey FOREIGN KEY (grupo_id)
+    REFERENCES public.grupos (id_grupo) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+
+
+ALTER TABLE IF EXISTS public.grupo_tutor_historial
+    ADD CONSTRAINT grupo_tutor_historial_tutor_id_fkey FOREIGN KEY (tutor_id)
+    REFERENCES public.usuarios (id_usuario) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+
+
+ALTER TABLE IF EXISTS public.grupo_tutor_historial
+    ADD CONSTRAINT grupo_tutor_historial_asignado_por_fkey FOREIGN KEY (asignado_por)
+    REFERENCES public.usuarios (id_usuario) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
 
 
 ALTER TABLE IF EXISTS public.estudiantes
@@ -373,6 +417,18 @@ ALTER TABLE IF EXISTS public.grupos
     ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_grupos_usuario
     ON public.grupos(usuario_id);
+ALTER TABLE IF EXISTS public.grupos
+    ADD CONSTRAINT grupos_tutor_asignado_id_fkey FOREIGN KEY (tutor_asignado_id)
+    REFERENCES public.usuarios (id_usuario) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_grupos_tutor_asignado
+    ON public.grupos(tutor_asignado_id);
+ALTER TABLE IF EXISTS public.grupos
+    ADD CONSTRAINT grupos_sesion_minijuego_id_fkey FOREIGN KEY (sesion_minijuego_id)
+    REFERENCES public.minijuegos (id_minijuego) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_grupos_activo
     ON public.grupos(activo);
 

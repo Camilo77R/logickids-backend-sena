@@ -3,7 +3,7 @@ import { ok, created } from '../utils/response.js';
 
 export const listar = async (req, res, next) => {
   try {
-    const data = await svc.listar(req.user.id);
+    const data = await svc.listar(req.user);
     ok(res, data, 'Grupos obtenidos correctamente');
   } catch (e) { next(e); }
 };
@@ -19,7 +19,7 @@ export const obtener = async (req, res, next) => {
 
 export const crear = async (req, res, next) => {
   try {
-    const data = await svc.crear(req.user.id, req.user.institucion_id, req.body);
+    const data = await svc.crear(req.user, req.body);
     created(res, data, 'Grupo creado correctamente');
   } catch (e) { next(e); }
 };
@@ -54,11 +54,18 @@ export const restaurar = async (req, res, next) => {
 
 export const toggleSesion = async (req, res, next) => {
   try {
-    const data = await svc.toggleSesion(Number(req.params.id), req.user, req.body.sesion_activa);
+    const data = await svc.toggleSesion(Number(req.params.id), req.user, req.body);
     ok(
       res,
       data,
       `Sesión del grupo ${req.body.sesion_activa ? 'activada' : 'desactivada'} correctamente`
     );
+  } catch (e) { next(e); }
+};
+
+export const asignarTutor = async (req, res, next) => {
+  try {
+    const data = await svc.asignarTutor(Number(req.params.id), req.user, req.body.tutor_id);
+    ok(res, data, 'Tutor del grupo actualizado correctamente');
   } catch (e) { next(e); }
 };

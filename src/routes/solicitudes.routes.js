@@ -19,28 +19,28 @@ router.post(
 router.get(
   '/admin/solicitudes',
   requireAuth,
-  requireRole('admin', 'superadmin'),
+  requireRole('admin'),
   ctrl.listarSolicitudes
 );
 
 router.get(
   '/admin/solicitudes/:id',
   requireAuth,
-  requireRole('admin', 'superadmin'),
+  requireRole('admin'),
   ctrl.obtenerSolicitud
 );
 
 router.put(
   '/admin/solicitudes/:id/aprobar',
   requireAuth,
-  requireRole('admin', 'superadmin'),
+  requireRole('admin'),
   ctrl.aprobarSolicitud
 );
 
 router.put(
   '/admin/solicitudes/:id/rechazar',
   requireAuth,
-  requireRole('admin', 'superadmin'),
+  requireRole('admin'),
   validate(rechazarSolicitudSchema),
   ctrl.rechazarSolicitud
 );
