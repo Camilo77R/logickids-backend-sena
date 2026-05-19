@@ -111,7 +111,8 @@ CREATE TABLE IF NOT EXISTS public.eventos_sesion
 CREATE TABLE IF NOT EXISTS public.grupos
 (
     id_grupo integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
-    usuario_id integer NOT NULL,
+    usuario_id integer,
+    creado_por_usuario_id integer NOT NULL,
     tutor_asignado_id integer,
     sesion_minijuego_id integer,
     nombre character varying(100) COLLATE pg_catalog."default" NOT NULL,
@@ -414,9 +415,16 @@ ALTER TABLE IF EXISTS public.grupos
     ADD CONSTRAINT grupos_usuario_id_fkey FOREIGN KEY (usuario_id)
     REFERENCES public.usuarios (id_usuario) MATCH SIMPLE
     ON UPDATE NO ACTION
-    ON DELETE CASCADE;
+    ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_grupos_usuario
     ON public.grupos(usuario_id);
+ALTER TABLE IF EXISTS public.grupos
+    ADD CONSTRAINT grupos_creado_por_usuario_id_fkey FOREIGN KEY (creado_por_usuario_id)
+    REFERENCES public.usuarios (id_usuario) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE NO ACTION;
+CREATE INDEX IF NOT EXISTS idx_grupos_creado_por_usuario
+    ON public.grupos(creado_por_usuario_id);
 ALTER TABLE IF EXISTS public.grupos
     ADD CONSTRAINT grupos_tutor_asignado_id_fkey FOREIGN KEY (tutor_asignado_id)
     REFERENCES public.usuarios (id_usuario) MATCH SIMPLE

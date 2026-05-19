@@ -149,16 +149,21 @@ WHERE roles.nombre = 'admin' AND instituciones.nombre = 'Colegio Prueba'
 ON CONFLICT (email) DO NOTHING;
 
 -- 15. GRUPO DE PRUEBA PARA EL TUTOR
-INSERT INTO public.grupos (usuario_id, tutor_asignado_id, institucion_id, nombre, descripcion, activo)
+INSERT INTO public.grupos (creado_por_usuario_id, tutor_asignado_id, institucion_id, nombre, descripcion, activo)
 SELECT
-  u.id_usuario,
-  u.id_usuario,
+  admin.id_usuario,
+  tutor.id_usuario,
   i.id_institucion,
   'Grupo Matemáticas 5A',
   'Grupo de matemáticas para quinto grado',
   true
-FROM public.usuarios u, public.instituciones i
-WHERE u.email = 'tutor@logickids.dev' AND i.nombre = 'Colegio Prueba'
+FROM public.usuarios tutor
+JOIN public.instituciones i
+  ON i.nombre = 'Colegio Prueba'
+JOIN public.usuarios admin
+  ON admin.email = 'admin.colegioprueba@logickids.dev'
+ AND admin.institucion_id = i.id_institucion
+WHERE tutor.email = 'tutor@logickids.dev'
 ON CONFLICT DO NOTHING;
 
 -- 16. HISTORIAL DE ASIGNACIÓN TUTOR -> GRUPO
