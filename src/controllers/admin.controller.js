@@ -3,7 +3,10 @@ import { ok, created } from '../utils/response.js';
 
 export const listarUsuarios = async (req, res, next) => {
   try {
-    const data = await adminService.listarUsuarios(req.user.institucion_id);
+    const data = await adminService.listarUsuarios(req.user, {
+      rol: req.query.rol ?? 'tutor',
+      institucion_id: req.query.institucion_id ? Number(req.query.institucion_id) : undefined,
+    });
     ok(res, data, 'Usuarios obtenidos correctamente');
   } catch (error) { next(error); }
 };
@@ -17,9 +20,15 @@ export const obtenerUsuario = async (req, res, next) => {
 
 export const cambiarEstadoUsuario = async (req, res, next) => {
   try {
-    // Se pasa req.user para validar el scope de institución
-    const data = await adminService.cambiarEstadoUsuario(req.params.id, req.body.estado, req.user);
+    const data = await adminService.cambiarEstadoUsuario(Number(req.params.id), req.body.estado, req.user);
     ok(res, data, 'Estado del usuario actualizado correctamente');
+  } catch (error) { next(error); }
+};
+
+export const crearAdminInstitucional = async (req, res, next) => {
+  try {
+    const data = await adminService.crearAdminInstitucional(req.user, req.body);
+    created(res, data, 'Admin institucional creado correctamente');
   } catch (error) { next(error); }
 };
 
@@ -68,6 +77,13 @@ export const actualizarInstitucion = async (req, res, next) => {
   try {
     const data = await adminService.actualizarInstitucion(Number(req.params.id), req.body);
     ok(res, data, 'Institución actualizada correctamente');
+  } catch (error) { next(error); }
+};
+
+export const dashboard = async (req, res, next) => {
+  try {
+    const data = await adminService.listarDashboard(req.user);
+    ok(res, data, 'Dashboard administrativo obtenido correctamente');
   } catch (error) { next(error); }
 };
 

@@ -13,6 +13,7 @@ const WEB_SESSION_FIELDS = [
   'usuarios.nombre',
   'usuarios.email',
   'usuarios.institucion_id',
+  'usuarios.es_admin_principal',
   'roles.nombre as rol',
   'estados_usuario.nombre as estado',
   'instituciones.nombre as institucion',

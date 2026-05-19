@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import {
   cambiarEstadoUsuarioSchema,
+  crearAdminInstitucionalSchema,
   crearInstitucionSchema,
   actualizarInstitucionSchema,
   toggleMinijuegoSchema,
@@ -14,9 +15,11 @@ const router = Router();
 router.use(requireAuth);
 
 // Rutas exclusivas del admin de institución
-router.get('/usuarios', requireRole('admin'), ctrl.listarUsuarios);
-router.get('/usuarios/:id', requireRole('admin'), ctrl.obtenerUsuario);
-router.patch('/usuarios/:id/estado', requireRole('admin'), validate(cambiarEstadoUsuarioSchema), ctrl.cambiarEstadoUsuario);
+router.get('/dashboard', requireRole('admin', 'superadmin'), ctrl.dashboard);
+router.get('/usuarios', requireRole('admin', 'superadmin'), ctrl.listarUsuarios);
+router.post('/usuarios/admins', requireRole('admin', 'superadmin'), validate(crearAdminInstitucionalSchema), ctrl.crearAdminInstitucional);
+router.get('/usuarios/:id', requireRole('admin', 'superadmin'), ctrl.obtenerUsuario);
+router.patch('/usuarios/:id/estado', requireRole('admin', 'superadmin'), validate(cambiarEstadoUsuarioSchema), ctrl.cambiarEstadoUsuario);
 
 // Rutas exclusivas del superadmin
 router.get('/instituciones',      requireRole('superadmin'), ctrl.listarInstituciones);

@@ -30,14 +30,15 @@ ON CONFLICT (nombre) DO NOTHING;
 -- Contraseña: Admin123!
 -- hash bcrypt costo 10 de "Admin123!"
 -- =============================================
-INSERT INTO public.usuarios (nombre, email, contrasena_hash, rol_id, institucion_id, estado_id)
+INSERT INTO public.usuarios (nombre, email, contrasena_hash, rol_id, institucion_id, estado_id, es_admin_principal)
 SELECT
   'Admin ' || i.nombre,
   'admin.' || LOWER(REGEXP_REPLACE(i.nombre, '\s+', '', 'g')) || '@logickids.dev',
   '$2b$10$XKHuHkHY9oekjMwZNVoV0.U5fWBDjjq5aGbfgAUKvHq7TiPgCqNqe',
   (SELECT id_rol FROM public.roles WHERE nombre = 'admin'),
   i.id_institucion,
-  1
+  1,
+  true
 FROM public.instituciones i
 WHERE i.nombre IN (
   'Colegio San José','Instituto Técnico Central','Colegio Nuevo Horizonte',
@@ -236,8 +237,9 @@ ON CONFLICT (email) DO NOTHING;
 -- =============================================
 -- PASO 4: GRUPOS (2 por tutor = ~100 grupos)
 -- =============================================
-INSERT INTO public.grupos (usuario_id, institucion_id, nombre, descripcion, activo)
+INSERT INTO public.grupos (usuario_id, tutor_asignado_id, institucion_id, nombre, descripcion, activo)
 SELECT
+  u.id_usuario,
   u.id_usuario,
   u.institucion_id,
   'Grupo ' || nombre_grupo || ' - ' || SPLIT_PART(u.nombre, ' ', 1),
@@ -248,6 +250,25 @@ CROSS JOIN (VALUES ('Mañana 5A'), ('Tarde 6B')) AS g(nombre_grupo)
 WHERE u.rol_id = (SELECT id_rol FROM public.roles WHERE nombre = 'tutor')
   AND u.email LIKE '%@%'
   AND u.email NOT LIKE '%logickids.dev%'
+ON CONFLICT DO NOTHING;
+
+-- =============================================
+-- PASO 4.1: HISTORIAL DE ASIGNACIÓN TUTOR -> GRUPO
+-- =============================================
+INSERT INTO public.grupo_tutor_historial (grupo_id, tutor_id, asignado_por, fecha_inicio, activo)
+SELECT
+  g.id_grupo,
+  g.tutor_asignado_id,
+  admin.id_usuario,
+  g.creado_en,
+  true
+FROM public.grupos g
+JOIN public.usuarios tutor ON tutor.id_usuario = g.tutor_asignado_id
+JOIN public.usuarios admin
+  ON admin.institucion_id = g.institucion_id
+ AND admin.es_admin_principal = true
+ AND admin.rol_id = (SELECT id_rol FROM public.roles WHERE nombre = 'admin')
+WHERE g.tutor_asignado_id IS NOT NULL
 ON CONFLICT DO NOTHING;
 
 -- =============================================
@@ -306,8 +327,7 @@ SELECT DISTINCT ON (e.id_estudiante, g.id_grupo)
   CURRENT_DATE - (FLOOR(RANDOM() * 60)::int || ' days')::INTERVAL,
   true
 FROM public.grupos g
-JOIN public.usuarios u ON g.usuario_id = u.id_usuario
-JOIN public.estudiantes e ON e.institucion_id = u.institucion_id
+JOIN public.estudiantes e ON e.institucion_id = g.institucion_id
 WHERE g.activo = true
   AND (SELECT COUNT(*) FROM public.estudiante_grupo_historial egh WHERE egh.grupo_id = g.id_grupo) < 8
   AND e.id_estudiante % 3 = g.id_grupo % 3

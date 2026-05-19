@@ -139,7 +139,7 @@ describe('📝 Solicitudes de reactivación', () => {
     expect(secondRes.body.success).toBe(false);
   });
 
-  it('✅ permite al superadmin listar solicitudes con contrato estándar', async () => {
+  it('✅ permite al admin institucional listar solicitudes con contrato estándar y bloquea a superadmin', async () => {
     const fixture = await provisionSuspendedTutor();
 
     await request(app)
@@ -149,9 +149,15 @@ describe('📝 Solicitudes de reactivación', () => {
         motivo: 'Necesito recuperar mi acceso para continuar con mis grupos',
       });
 
-    const res = await request(app)
+    const forbiddenForSuperadmin = await request(app)
       .get('/api/solicitudes/admin/solicitudes')
       .set(authHeader(fixture.superToken));
+
+    expect(forbiddenForSuperadmin.status).toBe(403);
+
+    const res = await request(app)
+      .get('/api/solicitudes/admin/solicitudes')
+      .set(authHeader(fixture.adminToken));
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);

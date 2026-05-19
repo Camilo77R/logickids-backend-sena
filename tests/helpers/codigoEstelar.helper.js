@@ -86,9 +86,11 @@ export const provisionPlayableStudent = async ({
 
   const tutorToken = await loginAs(tutorEmail, tutorPassword);
 
+  const codigoEstelarId = await resolveCodigoEstelarId();
+
   const createGroupRes = await request(app)
     .post('/api/grupos')
-    .set(authHeader(tutorToken))
+    .set(authHeader(adminToken))
     .send({
       nombre: `Grupo ${suffix}`,
       descripcion: 'Grupo de pruebas para Codigo Estelar',
@@ -100,9 +102,18 @@ export const provisionPlayableStudent = async ({
 
   const groupId = createGroupRes.body.data.id;
 
+  const assignTutorRes = await request(app)
+    .patch(`/api/grupos/${groupId}/tutor`)
+    .set(authHeader(adminToken))
+    .send({ tutor_id: tutorRecord.id });
+
+  if (assignTutorRes.status !== 200) {
+    throw new Error(`No se pudo asignar el tutor al grupo: ${JSON.stringify(assignTutorRes.body)}`);
+  }
+
   const createStudentRes = await request(app)
     .post('/api/estudiantes')
-    .set(authHeader(tutorToken))
+    .set(authHeader(adminToken))
     .send({
       nombre: `Estudiante ${suffix}`,
       edad: 8,
@@ -120,7 +131,7 @@ export const provisionPlayableStudent = async ({
     const openClassRes = await request(app)
       .patch(`/api/grupos/${groupId}/sesion`)
       .set(authHeader(tutorToken))
-      .send({ sesion_activa: true });
+      .send({ sesion_activa: true, minijuego_id: codigoEstelarId });
 
     if (openClassRes.status !== 200) {
       throw new Error(`No se pudo abrir la clase: ${JSON.stringify(openClassRes.body)}`);
@@ -150,6 +161,7 @@ export const provisionPlayableStudent = async ({
     studentToken: studentLoginRes.body.data.token,
     institutionId,
     groupId,
+    tutorId: tutorRecord.id,
     studentId,
   };
 };
