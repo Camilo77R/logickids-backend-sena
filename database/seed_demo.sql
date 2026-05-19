@@ -237,15 +237,19 @@ ON CONFLICT (email) DO NOTHING;
 -- =============================================
 -- PASO 4: GRUPOS (2 por tutor = ~100 grupos)
 -- =============================================
-INSERT INTO public.grupos (usuario_id, tutor_asignado_id, institucion_id, nombre, descripcion, activo)
+INSERT INTO public.grupos (creado_por_usuario_id, tutor_asignado_id, institucion_id, nombre, descripcion, activo)
 SELECT
-  u.id_usuario,
+  admin.id_usuario,
   u.id_usuario,
   u.institucion_id,
   'Grupo ' || nombre_grupo || ' - ' || SPLIT_PART(u.nombre, ' ', 1),
   'Grupo de matemáticas y lógica',
   true
 FROM public.usuarios u
+JOIN public.usuarios admin
+  ON admin.institucion_id = u.institucion_id
+ AND admin.es_admin_principal = true
+ AND admin.rol_id = (SELECT id_rol FROM public.roles WHERE nombre = 'admin')
 CROSS JOIN (VALUES ('Mañana 5A'), ('Tarde 6B')) AS g(nombre_grupo)
 WHERE u.rol_id = (SELECT id_rol FROM public.roles WHERE nombre = 'tutor')
   AND u.email LIKE '%@%'
