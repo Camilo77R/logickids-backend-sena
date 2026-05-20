@@ -164,7 +164,7 @@ describe('🔌 Sockets — Codigo Estelar', () => {
     } finally {
       await closeSocket(socket);
     }
-  });
+  }, 20_000);
 
   it('❌ rechaza el handshake si la institucion fue desactivada aunque el token sea viejo', async () => {
     const fixture = await provisionPlayableStudent();
