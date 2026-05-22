@@ -1,15 +1,6 @@
 import { z } from 'zod';
 
-/** PATCH /api/admin/usuarios/:id/estado */
-export const cambiarEstadoUsuarioSchema = z.object({
-  estado: z
-    .string({ required_error: 'El estado es obligatorio' })
-    .trim()
-    .min(1, 'El estado no puede estar vacío'),
-});
-
-/** POST /api/admin/usuarios/admins */
-export const crearAdminInstitucionalSchema = z.object({
+const crearUsuarioInstitucionalBaseSchema = z.object({
   nombre: z
     .string({ required_error: 'El nombre es obligatorio' })
     .trim()
@@ -28,6 +19,20 @@ export const crearAdminInstitucionalSchema = z.object({
     .positive('El ID de institución debe ser positivo')
     .optional(),
 });
+
+/** PATCH /api/admin/usuarios/:id/estado */
+export const cambiarEstadoUsuarioSchema = z.object({
+  estado: z
+    .string({ required_error: 'El estado es obligatorio' })
+    .trim()
+    .min(1, 'El estado no puede estar vacío'),
+});
+
+/** POST /api/admin/usuarios/admins */
+export const crearAdminInstitucionalSchema = crearUsuarioInstitucionalBaseSchema;
+
+/** POST /api/admin/usuarios/tutores */
+export const crearTutorInstitucionalSchema = crearUsuarioInstitucionalBaseSchema;
 
 /** POST /api/admin/instituciones — crear institución */
 export const crearInstitucionSchema = z.object({

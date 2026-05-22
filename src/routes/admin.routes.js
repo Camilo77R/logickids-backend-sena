@@ -5,6 +5,7 @@ import { validate } from '../middlewares/validate.js';
 import {
   cambiarEstadoUsuarioSchema,
   crearAdminInstitucionalSchema,
+  crearTutorInstitucionalSchema,
   crearInstitucionSchema,
   actualizarInstitucionSchema,
   toggleMinijuegoSchema,
@@ -18,6 +19,7 @@ router.use(requireAuth);
 router.get('/dashboard', requireRole('admin', 'superadmin'), ctrl.dashboard);
 router.get('/usuarios', requireRole('admin', 'superadmin'), ctrl.listarUsuarios);
 router.post('/usuarios/admins', requireRole('admin', 'superadmin'), validate(crearAdminInstitucionalSchema), ctrl.crearAdminInstitucional);
+router.post('/usuarios/tutores', requireRole('admin', 'superadmin'), validate(crearTutorInstitucionalSchema), ctrl.crearTutorInstitucional);
 router.get('/usuarios/:id', requireRole('admin', 'superadmin'), ctrl.obtenerUsuario);
 router.patch('/usuarios/:id/estado', requireRole('admin', 'superadmin'), validate(cambiarEstadoUsuarioSchema), ctrl.cambiarEstadoUsuario);
 
