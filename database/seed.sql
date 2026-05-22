@@ -9,8 +9,8 @@ BEGIN;
 -- 1. ROLES
 INSERT INTO public.roles (nombre, descripcion) VALUES
   ('superadmin', 'Administrador global de la plataforma. Gestiona instituciones y minijuegos.'),
-  ('admin',      'Administrador de una institución. Gestiona tutores de su institución.'),
-  ('tutor',      'Docente que gestiona grupos y estudiantes.')
+  ('admin',      'Administrador de una institución. Gestiona admins, tutores, grupos y estudiantes de su institución.'),
+  ('tutor',      'Docente que opera las sesiones y el juego de los grupos que tiene asignados.')
 ON CONFLICT (nombre) DO NOTHING;
 
 -- 2. ESTADOS DE USUARIO
@@ -133,36 +133,71 @@ FROM public.roles, public.instituciones
 WHERE roles.nombre = 'tutor' AND instituciones.nombre = 'Colegio Prueba'
 ON CONFLICT (email) DO NOTHING;
 
--- 14. GRUPO DE PRUEBA PARA EL TUTOR
-INSERT INTO public.grupos (usuario_id, institucion_id, nombre, descripcion, activo)
+-- 14. ADMIN PRINCIPAL DE PRUEBA
+-- Contraseña: Admin123!
+INSERT INTO public.usuarios (nombre, email, contrasena_hash, rol_id, institucion_id, estado_id, es_admin_principal)
 SELECT
-  u.id_usuario,
+  'Admin Principal Colegio Prueba',
+  'admin.colegioprueba@logickids.dev',
+  '$2b$10$XKHuHkHY9oekjMwZNVoV0.U5fWBDjjq5aGbfgAUKvHq7TiPgCqNqe',
+  id_rol,
+  id_institucion,
+  1,
+  true
+FROM public.roles, public.instituciones
+WHERE roles.nombre = 'admin' AND instituciones.nombre = 'Colegio Prueba'
+ON CONFLICT (email) DO NOTHING;
+
+-- 15. GRUPO DE PRUEBA PARA EL TUTOR
+INSERT INTO public.grupos (creado_por_usuario_id, tutor_asignado_id, institucion_id, nombre, descripcion, activo)
+SELECT
+  admin.id_usuario,
+  tutor.id_usuario,
   i.id_institucion,
   'Grupo Matemáticas 5A',
   'Grupo de matemáticas para quinto grado',
   true
-FROM public.usuarios u, public.instituciones i
-WHERE u.email = 'tutor@logickids.dev' AND i.nombre = 'Colegio Prueba'
+FROM public.usuarios tutor
+JOIN public.instituciones i
+  ON i.nombre = 'Colegio Prueba'
+JOIN public.usuarios admin
+  ON admin.email = 'admin.colegioprueba@logickids.dev'
+ AND admin.institucion_id = i.id_institucion
+WHERE tutor.email = 'tutor@logickids.dev'
 ON CONFLICT DO NOTHING;
 
--- 15. ESTUDIANTE DE PRUEBA
+-- 16. HISTORIAL DE ASIGNACIÓN TUTOR -> GRUPO
+INSERT INTO public.grupo_tutor_historial (grupo_id, tutor_id, asignado_por, fecha_inicio, activo)
+SELECT
+  g.id_grupo,
+  tutor.id_usuario,
+  admin.id_usuario,
+  NOW(),
+  true
+FROM public.grupos g
+JOIN public.usuarios tutor ON tutor.id_usuario = g.tutor_asignado_id
+JOIN public.usuarios admin ON admin.email = 'admin.colegioprueba@logickids.dev'
+WHERE g.nombre = 'Grupo Matemáticas 5A'
+ON CONFLICT DO NOTHING;
+
+-- 17. ESTUDIANTE DE PRUEBA
 INSERT INTO public.estudiantes (institucion_id, nombre, edad, color_avatar, qr_token, estado_id)
 VALUES
   (1, 'Ana García', 10, '#FF6B6B', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test_qr_token', 1)
 ON CONFLICT (qr_token) DO NOTHING;
 
--- 16. ASIGNAR ESTUDIANTE AL GRUPO
+-- 18. ASIGNAR ESTUDIANTE AL GRUPO
 INSERT INTO public.estudiante_grupo_historial (estudiante_id, grupo_id, fecha_inicio, activo)
 SELECT
   e.id_estudiante,
   g.id_grupo,
   CURRENT_DATE,
   true
-FROM public.estudiantes e, public.grupos g, public.usuarios u
-WHERE e.nombre = 'Ana García' AND g.nombre = 'Grupo Matemáticas 5A' AND u.email = 'tutor@logickids.dev' AND g.usuario_id = u.id_usuario
+FROM public.estudiantes e, public.grupos g
+WHERE e.nombre = 'Ana García' AND g.nombre = 'Grupo Matemáticas 5A'
 ON CONFLICT DO NOTHING;
 
--- 17. SESIÓN DE JUEGO COMPLETADA (EJEMPLO)
+-- 19. SESIÓN DE JUEGO COMPLETADA (EJEMPLO)
 INSERT INTO public.sesiones_juego (estudiante_id, minijuego_id, dificultad, puntaje, aciertos, errores, combo_maximo, estado_id, iniciada_en, finalizada_en)
 SELECT
   e.id_estudiante,
@@ -179,7 +214,7 @@ FROM public.estudiantes e, public.minijuegos m
 WHERE e.nombre = 'Ana García' AND m.slug = 'logica-secuencias'
 ON CONFLICT DO NOTHING;
 
--- 18. EVENTOS DE LA SESIÓN (EJEMPLOS)
+-- 20. EVENTOS DE LA SESIÓN (EJEMPLOS)
 -- Obtener el ID de la sesión insertada
 INSERT INTO public.eventos_sesion (sesion_id, tipo_evento_id, habilidad_id, tiempo_reaccion_ms, puntos, combo_en_evento, ocurrido_en)
 SELECT
@@ -225,7 +260,7 @@ JOIN public.habilidades h ON h.nombre = 'Lógica'
 WHERE e.nombre = 'Ana García' AND sj.puntaje = 850
 ON CONFLICT DO NOTHING;
 
--- 19. ESTADÍSTICAS GENERADAS
+-- 21. ESTADÍSTICAS GENERADAS
 INSERT INTO public.estadisticas_habilidad (estudiante_id, habilidad_id, total_intentos, aciertos, errores, precision_pct, promedio_reaccion_ms, actualizado_en)
 SELECT
   e.id_estudiante,
@@ -246,23 +281,23 @@ ON CONFLICT (estudiante_id, habilidad_id) DO UPDATE SET
   promedio_reaccion_ms = EXCLUDED.promedio_reaccion_ms,
   actualizado_en = EXCLUDED.actualizado_en;
 
--- 20. LOGRO DESBLOQUEADO
+-- 22. LOGRO DESBLOQUEADO
 INSERT INTO public.logros (estudiante_id, catalogo_logro_id, desbloqueado_en)
 SELECT
   e.id_estudiante,
-  cl.id_logro,
+  cl.id_catalogo_logro,
   CURRENT_TIMESTAMP - INTERVAL '1 hour'
 FROM public.estudiantes e, public.catalogo_logros cl
 WHERE e.nombre = 'Ana García' AND cl.clave = 'precision_90'
 ON CONFLICT (estudiante_id, catalogo_logro_id) DO NOTHING;
 
--- 21. RECOMENDACIÓN GENERADA POR IA
+-- 23. RECOMENDACIÓN GENERADA POR IA
 INSERT INTO public.recomendaciones (estudiante_id, habilidad_id, severidad_id, modelo_ia_id, mensaje, precision_momento, generado_en, activo)
 SELECT
   e.id_estudiante,
   h.id_habilidad,
-  ns.id_nivel,
-  mia.id_modelo,
+  ns.id_nivel_severidad,
+  mia.id_modelo_ia,
   'Ana muestra buena comprensión de secuencias lógicas con una precisión del 83%. Recomiendo continuar practicando con niveles de dificultad media para mantener el engagement.',
   83.33,
   CURRENT_TIMESTAMP,

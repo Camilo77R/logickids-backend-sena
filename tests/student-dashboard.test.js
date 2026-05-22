@@ -24,7 +24,7 @@ describe('📱 Dashboard del estudiante', () => {
 
     const archiveGroupRes = await request(app)
       .patch(`/api/grupos/${fixture.groupId}/archivar`)
-      .set(authHeader(fixture.tutorToken));
+      .set(authHeader(fixture.adminToken));
 
     expect(archiveGroupRes.status).toBe(200);
 

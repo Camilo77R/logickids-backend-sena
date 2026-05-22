@@ -15,6 +15,7 @@ lk-*.log
 # Env files
 .env
 .env.*
+!.env.example
 
 # Python
 __pycache__/

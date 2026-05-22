@@ -31,14 +31,15 @@ const assertTenantScopedUser = (user) => {
  * Aplica el scope histórico de estudiantes.
  *
  * Analogía: aunque un niño ya no esté sentado hoy en un salón activo,
- * seguimos pudiendo saber si alguna vez perteneció al salón del tutor.
- * Eso permite reasignarlo después de archivar un grupo sin perder ownership.
+ * seguimos pudiendo saber si alguna vez perteneció al salón del tutor asignado.
+ * Eso permite reasignarlo después de archivar un grupo sin perder trazabilidad.
  */
 export const applyStudentOwnershipScope = (
   query,
   user,
   {
     studentIdColumn = 'estudiantes.id_estudiante',
+    studentInstitutionColumn = 'estudiantes.institucion_id',
     historyAlias = 'egh_scope',
     groupAlias = 'grupos_scope',
   } = {}
@@ -49,6 +50,11 @@ export const applyStudentOwnershipScope = (
     return query;
   }
 
+  if (user.rol === 'admin') {
+    query.where(studentInstitutionColumn, user.institucion_id);
+    return query;
+  }
+
   query.whereExists(function scopeStudentHistory() {
     this.select(db.raw('1'))
       .from(`estudiante_grupo_historial as ${historyAlias}`)
@@ -56,9 +62,7 @@ export const applyStudentOwnershipScope = (
       .whereRaw(`${historyAlias}.estudiante_id = ${studentIdColumn}`)
       .where(`${groupAlias}.institucion_id`, user.institucion_id);
 
-    if (user.rol === 'tutor') {
-      this.where(`${groupAlias}.usuario_id`, user.id);
-    }
+    this.where(`${groupAlias}.tutor_asignado_id`, user.id);
   });
 
   return query;
@@ -68,13 +72,13 @@ export const applyStudentOwnershipScope = (
  * Aplica scope de acceso sobre entidades que dependen de grupos.
  * - superadmin: acceso global
  * - admin: acceso a cualquier grupo de su institución
- * - tutor: acceso a grupos de su institución y de su ownership
+ * - tutor: acceso a grupos de su institución y donde es el tutor asignado
  */
 export const applyGroupAccessScope = (
   query,
   user,
   {
-    ownerColumn = 'grupos.usuario_id',
+    ownerColumn = 'grupos.tutor_asignado_id',
     tenantColumn = 'grupos.institucion_id',
   } = {}
 ) => {
@@ -108,14 +112,16 @@ export const applyInstitutionScope = (query, user, tenantColumn = 'institucion_i
 };
 
 /**
- * Verifica que el grupo exista y pertenezca al usuario autenticado.
+ * Verifica que el grupo exista y pertenezca al alcance del usuario autenticado.
  */
 export const assertGroupBelongsToUser = async (grupoId, user, trx = db) => {
   const query = trx('grupos')
     .where('grupos.id_grupo', grupoId)
     .select(
       'grupos.id_grupo',
-      'grupos.usuario_id',
+      'grupos.creado_por_usuario_id',
+      'grupos.tutor_asignado_id',
+      'grupos.sesion_minijuego_id',
       'grupos.nombre',
       'grupos.institucion_id',
       'grupos.activo',
@@ -133,7 +139,7 @@ export const assertGroupBelongsToUser = async (grupoId, user, trx = db) => {
 };
 
 /**
- * Verifica que el estudiante esté vinculado a un grupo del usuario autenticado.
+ * Verifica que el estudiante esté vinculado a un grupo visible para el usuario autenticado.
  */
 export const assertStudentBelongsToUser = async (studentId, user, trx = db) => {
   let query = trx('estudiantes').where('estudiantes.id_estudiante', studentId);
@@ -143,7 +149,7 @@ export const assertStudentBelongsToUser = async (studentId, user, trx = db) => {
     'estudiantes.id_estudiante',
     'estudiantes.nombre',
     'egh.grupo_id',
-    'grupos.usuario_id',
+    'grupos.tutor_asignado_id',
     'grupos.institucion_id'
   );
 
@@ -196,4 +202,21 @@ export const getActiveStudentIdsByGroup = async (grupoId, user, trx = db) => {
     .select('estudiante_id');
 
   return rows.map(({ estudiante_id }) => estudiante_id);
+};
+
+/**
+ * Verifica que el usuario autenticado sea el tutor actualmente asignado al grupo.
+ *
+ * POR QUÉ:
+ * aunque el admin vea el grupo por institución, abrir/cerrar clase sigue siendo
+ * una responsabilidad exclusivamente pedagógica del tutor.
+ */
+export const assertGroupAssignedToTutor = async (grupoId, user, trx = db) => {
+  const group = await assertGroupBelongsToUser(grupoId, user, trx);
+
+  if (user.rol !== 'tutor' || group.tutor_asignado_id !== user.id) {
+    throw new AppError('Solo el tutor asignado puede operar la sesión de este grupo', 403);
+  }
+
+  return group;
 };

@@ -8,6 +8,27 @@ export const cambiarEstadoUsuarioSchema = z.object({
     .min(1, 'El estado no puede estar vacío'),
 });
 
+/** POST /api/admin/usuarios/admins */
+export const crearAdminInstitucionalSchema = z.object({
+  nombre: z
+    .string({ required_error: 'El nombre es obligatorio' })
+    .trim()
+    .min(2, 'El nombre debe tener al menos 2 caracteres')
+    .max(100, 'El nombre no puede superar 100 caracteres'),
+
+  email: z
+    .string({ required_error: 'El email es obligatorio' })
+    .trim()
+    .email('El email no tiene un formato válido')
+    .max(150, 'El email no puede superar 150 caracteres'),
+
+  institucion_id: z
+    .number({ invalid_type_error: 'El ID de institución debe ser numérico' })
+    .int()
+    .positive('El ID de institución debe ser positivo')
+    .optional(),
+});
+
 /** POST /api/admin/instituciones — crear institución */
 export const crearInstitucionSchema = z.object({
   nombre: z

@@ -47,7 +47,8 @@ const resolvePlayableStudentContext = async (estudiante_id) =>
       'estados_estudiante.nombre as estado',
       'instituciones.activo as institucion_activa',
       'egh.grupo_id',
-      'grupos.activo as grupo_activo'
+      'grupos.activo as grupo_activo',
+      'grupos.sesion_minijuego_id'
     )
     .first();
 
@@ -241,7 +242,18 @@ export const iniciar = async (estudiante_id, { minijuego_id, dificultad: request
   const playableContext = await resolvePlayableStudentContext(estudiante_id);
   assertPlayableStudentContext(playableContext);
 
-  const minijuego = await resolveMinijuegoCatalog(minijuego_id);
+  const configuredMinigameId = playableContext.sesion_minijuego_id ?? null;
+  const selectedMinigameId = configuredMinigameId ?? minijuego_id ?? null;
+
+  if (!selectedMinigameId) {
+    throw new AppError('La sesión del grupo no tiene un minijuego configurado todavía', 409);
+  }
+
+  if (configuredMinigameId && minijuego_id && configuredMinigameId !== minijuego_id) {
+    throw new AppError('El grupo fue abierto para un minijuego diferente al solicitado', 409);
+  }
+
+  const minijuego = await resolveMinijuegoCatalog(selectedMinigameId);
   const dificultad = await resolveInitialDifficulty(estudiante_id, minijuego, requestedDifficulty);
   const sesion = await openStudentGameSession({
     estudiante_id,

@@ -31,6 +31,9 @@ const STUDENT_MOBILE_PROFILE_FIELDS = [
   ...STUDENT_FIELDS,
   'grupos.nombre as grupo_nombre',
   'grupos.activo as grupo_activo',
+  'grupos.sesion_minijuego_id',
+  'minijuegos.slug as sesion_minijuego_slug',
+  'minijuegos.titulo as sesion_minijuego_titulo',
 ];
 
 /**
@@ -69,6 +72,7 @@ const generateUniqueQR = async () => {
 export const loginEstudiante = async (qr_token) => {
   const est = await baseQuery()
     .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
+    .leftJoin('minijuegos', 'minijuegos.id_minijuego', 'grupos.sesion_minijuego_id')
     .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
     .where('estudiantes.qr_token', qr_token)
     .select([
@@ -104,10 +108,9 @@ export const loginEstudiante = async (qr_token) => {
  */
 export const listar = async (user, grupo_id) => {
   let query = baseQuery()
-    .join('grupos', 'grupos.id_grupo', 'egh.grupo_id')
+    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
     .where('estados_estudiante.nombre', 'activo')
-    .where('grupos.activo', true)
-    .select(STUDENT_FIELDS)
+    .select([...STUDENT_FIELDS, 'grupos.nombre as grupo_nombre', 'grupos.activo as grupo_activo'])
     .orderBy('estudiantes.nombre');
 
   query = applyStudentOwnershipScope(query, user);
@@ -162,6 +165,7 @@ export const obtener = async (id_estudiante, user) => {
 export const obtenerPerfilInfantil = (id_estudiante) =>
   baseQuery()
     .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
+    .leftJoin('minijuegos', 'minijuegos.id_minijuego', 'grupos.sesion_minijuego_id')
     .where('estudiantes.id_estudiante', id_estudiante)
     .select(STUDENT_MOBILE_PROFILE_FIELDS)
     .first();
@@ -170,12 +174,18 @@ export const obtenerPerfilInfantil = (id_estudiante) =>
  * Crea un estudiante y lo registra en el historial del grupo.
  * Genera automáticamente un QR token único.
  *
- * @param {object} user - Tutor que crea al estudiante
+ * @param {object} user - Admin institucional que crea al estudiante
  * @param {{ grupo_id, nombre, edad, color_avatar }} datos
- * @throws {AppError} 403 si el grupo no pertenece al tutor
+ * @throws {AppError} 403 si el grupo no pertenece a la institución del admin
  */
 export const crear = async (user, { grupo_id, nombre, edad, color_avatar }) => {
-  await assertGroupBelongsToUser(grupo_id, user);
+  if (grupo_id) {
+    const group = await assertGroupBelongsToUser(grupo_id, user);
+    if (group.activo === false) {
+      throw new AppError('No se puede asignar un estudiante a un grupo archivado', 409);
+    }
+  }
+
   const qr_token = await generateUniqueQR();
 
   const [est] = await db('estudiantes')
@@ -190,12 +200,14 @@ export const crear = async (user, { grupo_id, nombre, edad, color_avatar }) => {
     .returning('*');
 
   // Registra la asignación inicial en el historial de grupos
-  await db('estudiante_grupo_historial').insert({
-    estudiante_id: est.id_estudiante,
-    grupo_id,
-    fecha_inicio: db.fn.now(),
-    activo: true,
-  });
+  if (grupo_id) {
+    await db('estudiante_grupo_historial').insert({
+      estudiante_id: est.id_estudiante,
+      grupo_id,
+      fecha_inicio: db.fn.now(),
+      activo: true,
+    });
+  }
 
   return obtener(est.id_estudiante, user);
 };
@@ -323,7 +335,11 @@ export const toggleSesion = async (id_estudiante, user, sesion_activa) => {
  */
 export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
   const student = await assertStudentBelongsToUser(id_estudiante, user);
-  await assertGroupBelongsToUser(nuevo_grupo_id, user);
+  const newGroup = await assertGroupBelongsToUser(nuevo_grupo_id, user);
+
+  if (newGroup.activo === false) {
+    throw new AppError('No se puede mover el estudiante a un grupo archivado', 409);
+  }
 
   if (student.grupo_id === nuevo_grupo_id) {
     throw new AppError('El estudiante ya pertenece a ese grupo', 409);
@@ -345,6 +361,13 @@ export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
       })
       .onConflict(['estudiante_id', 'grupo_id', 'fecha_inicio'])
       .merge({ activo: true, fecha_fin: null });
+
+    await trx('estudiantes')
+      .where({ id_estudiante })
+      .update({
+        sesion_activa: false,
+        actualizado_en: trx.fn.now(),
+      });
   });
 
   return db('estudiantes')

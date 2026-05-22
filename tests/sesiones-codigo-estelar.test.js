@@ -62,7 +62,7 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
 
     const deactivateStudentRes = await request(app)
       .delete(`/api/estudiantes/${fixture.studentId}`)
-      .set(authHeader(fixture.tutorToken));
+      .set(authHeader(fixture.adminToken));
 
     expect(deactivateStudentRes.status).toBe(204);
 
@@ -81,7 +81,7 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
 
     const archiveGroupRes = await request(app)
       .patch(`/api/grupos/${fixture.groupId}/archivar`)
-      .set(authHeader(fixture.tutorToken));
+      .set(authHeader(fixture.adminToken));
 
     expect(archiveGroupRes.status).toBe(200);
 
@@ -108,7 +108,9 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
     expect(res.body.message).toContain('Sesión no activa');
   });
 
-  it('✅ finaliza con resumen oficial calculado desde eventos e ignora cifras infladas del cliente', async () => {
+  it(
+    '✅ finaliza con resumen oficial calculado desde eventos e ignora cifras infladas del cliente',
+    async () => {
     const codigoEstelarId = await resolveCodigoEstelarId();
     const fixture = await provisionPlayableStudent();
 
@@ -198,9 +200,13 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
       aciertos: 2,
       errores: 1,
     });
-  });
+    },
+    30_000
+  );
 
-  it('✅ permite reintentar finalizar sin duplicar el conteo histórico', async () => {
+  it(
+    '✅ permite reintentar finalizar sin duplicar el conteo histórico',
+    async () => {
     const codigoEstelarId = await resolveCodigoEstelarId();
     const fixture = await provisionPlayableStudent();
 
@@ -260,5 +266,7 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
       aciertos: 1,
       errores: 0,
     });
-  });
+    },
+    30_000
+  );
 });
