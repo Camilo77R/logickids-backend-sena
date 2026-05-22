@@ -321,6 +321,9 @@ ALTER TABLE IF EXISTS public.estudiante_grupo_historial
     ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS ux_est_un_grupo_activo
     ON public.estudiante_grupo_historial(estudiante_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_estudiante_un_solo_grupo_activo
+    ON public.estudiante_grupo_historial(estudiante_id)
+    WHERE activo = true AND fecha_fin IS NULL;
 
 
 ALTER TABLE IF EXISTS public.estudiante_grupo_historial

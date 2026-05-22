@@ -189,4 +189,31 @@ describe('🏫 Modelo institución-céntrico', () => {
     expect(historyRows[1].grupo_id).toBe(secondGroupId);
     expect(historyRows[1].activo).toBe(true);
   });
+
+  it('✅ impide más de un grupo activo simultáneo para el mismo estudiante', async () => {
+    const fixture = await provisionPlayableStudent({
+      suffix: buildCodigoEstelarSuffix('single-active-group'),
+      openClass: false,
+    });
+
+    const createSecondGroupRes = await request(app)
+      .post('/api/grupos')
+      .set(authHeader(fixture.adminToken))
+      .send({
+        nombre: `Grupo exclusivo ${Date.now()}`,
+        descripcion: 'Grupo para validar la restricción de historial activo',
+      });
+
+    expect(createSecondGroupRes.status).toBe(201);
+    const secondGroupId = createSecondGroupRes.body.data.id;
+
+    await expect(
+      db('estudiante_grupo_historial').insert({
+        estudiante_id: fixture.studentId,
+        grupo_id: secondGroupId,
+        fecha_inicio: new Date(),
+        activo: true,
+      })
+    ).rejects.toMatchObject({ code: '23505' });
+  });
 });
