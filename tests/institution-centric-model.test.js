@@ -78,6 +78,68 @@ describe('🏫 Modelo institución-céntrico', () => {
     expect(forbiddenRes.body.success).toBe(false);
   });
 
+  it('✅ cualquier admin institucional puede crear tutores activos con contraseña temporal', async () => {
+    const suffix = buildCodigoEstelarSuffix('tutors');
+    const { institutionId, adminToken } = await createInstitutionWithPrincipalAdmin(suffix);
+
+    const createSecondAdminRes = await request(app)
+      .post('/api/admin/usuarios/admins')
+      .set(authHeader(adminToken))
+      .send({
+        nombre: `Admin Auxiliar ${suffix}`,
+        email: `aux.${suffix}@logickids.dev`,
+      });
+
+    expect(createSecondAdminRes.status).toBe(201);
+
+    const auxiliarToken = await loginAs(
+      `aux.${suffix}@logickids.dev`,
+      createSecondAdminRes.body.data.contrasena_temporal
+    );
+
+    const createTutorRes = await request(app)
+      .post('/api/admin/usuarios/tutores')
+      .set(authHeader(auxiliarToken))
+      .send({
+        nombre: `Tutor Institucional ${suffix}`,
+        email: `tutor.${suffix}@logickids.dev`,
+      });
+
+    expect(createTutorRes.status).toBe(201);
+    expect(createTutorRes.body.success).toBe(true);
+    expect(createTutorRes.body.data.rol).toBe('tutor');
+    expect(createTutorRes.body.data.estado).toBe('activo');
+    expect(createTutorRes.body.data.es_admin_principal).toBe(false);
+    expect(createTutorRes.body.data.institucion_id).toBe(institutionId);
+    expect(createTutorRes.body.data.contrasena_temporal).toEqual(expect.any(String));
+
+    const tutorToken = await loginAs(
+      `tutor.${suffix}@logickids.dev`,
+      createTutorRes.body.data.contrasena_temporal
+    );
+
+    expect(typeof tutorToken).toBe('string');
+  });
+
+  it('✅ el superadmin puede crear un tutor institucional indicando la institución destino', async () => {
+    const suffix = buildCodigoEstelarSuffix('super-tutor');
+    const { superToken, institutionId } = await createInstitutionWithPrincipalAdmin(suffix);
+
+    const createTutorRes = await request(app)
+      .post('/api/admin/usuarios/tutores')
+      .set(authHeader(superToken))
+      .send({
+        nombre: `Tutor Global ${suffix}`,
+        email: `global.${suffix}@logickids.dev`,
+        institucion_id: institutionId,
+      });
+
+    expect(createTutorRes.status).toBe(201);
+    expect(createTutorRes.body.success).toBe(true);
+    expect(createTutorRes.body.data.rol).toBe('tutor');
+    expect(createTutorRes.body.data.institucion_id).toBe(institutionId);
+  });
+
   it('✅ expone dashboard global para superadmin y dashboard institucional para admin', async () => {
     const suffix = buildCodigoEstelarSuffix('dashboard');
     const { superToken, adminToken } = await createInstitutionWithPrincipalAdmin(suffix);

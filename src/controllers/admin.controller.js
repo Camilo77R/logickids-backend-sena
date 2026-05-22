@@ -32,6 +32,13 @@ export const crearAdminInstitucional = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+export const crearTutorInstitucional = async (req, res, next) => {
+  try {
+    const data = await adminService.crearTutorInstitucional(req.user, req.body);
+    created(res, data, 'Tutor institucional creado correctamente');
+  } catch (error) { next(error); }
+};
+
 export const listarInstituciones = async (req, res, next) => {
   try {
     const data = await adminService.listarInstituciones({

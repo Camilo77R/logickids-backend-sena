@@ -84,6 +84,52 @@ const normalizeInstitutionScope = async (actor, requestedInstitutionId) => {
   return actor.institucion_id;
 };
 
+const createProvisionedInstitutionUser = async (
+  {
+    nombre,
+    email,
+    institucion_id,
+    rol,
+    estado = 'activo',
+    es_admin_principal = false,
+  },
+  trx = db
+) => {
+  const contrasena_temporal = buildTemporaryPassword();
+
+  const [rol_id, estado_id, contrasena_hash] = await Promise.all([
+    resolveRoleId(rol, trx),
+    resolveUserStateId(estado, trx),
+    bcrypt.hash(contrasena_temporal, 10),
+  ]);
+
+  const [usuario] = await trx('usuarios')
+    .insert({
+      nombre,
+      email,
+      contrasena_hash,
+      rol_id,
+      institucion_id,
+      estado_id,
+      es_admin_principal,
+    })
+    .returning([
+      'id_usuario as id',
+      'nombre',
+      'email',
+      'institucion_id',
+      'es_admin_principal',
+      'creado_en',
+    ]);
+
+  return {
+    ...usuario,
+    rol,
+    estado,
+    contrasena_temporal,
+  };
+};
+
 const assertSameInstitution = (target, actor) => {
   if (actor.rol === 'superadmin') {
     return;
@@ -337,39 +383,46 @@ export const crearAdminInstitucional = async (
     throw new AppError('El email ya está registrado', 409);
   }
 
-  const contrasena_temporal = buildTemporaryPassword();
-
-  return db.transaction(async (trx) => {
-    const [rol_id, estado_id, contrasena_hash] = await Promise.all([
-      resolveRoleId('admin', trx),
-      resolveUserStateId('activo', trx),
-      bcrypt.hash(contrasena_temporal, 10),
-    ]);
-
-    const [usuario] = await trx('usuarios')
-      .insert({
+  return db.transaction((trx) =>
+    createProvisionedInstitutionUser(
+      {
         nombre,
         email,
-        contrasena_hash,
-        rol_id,
         institucion_id,
-        estado_id,
-        es_admin_principal: false,
-      })
-      .returning([
-        'id_usuario as id',
-        'nombre',
-        'email',
-        'institucion_id',
-        'es_admin_principal',
-        'creado_en',
-      ]);
+        rol: 'admin',
+      },
+      trx
+    )
+  );
+};
 
-    return {
-      ...usuario,
-      contrasena_temporal,
-    };
-  });
+export const crearTutorInstitucional = async (
+  actor,
+  { nombre, email, institucion_id: requestedInstitutionId }
+) => {
+  const institucion_id = await normalizeInstitutionScope(actor, requestedInstitutionId);
+  if (!institucion_id) {
+    throw new AppError('Debe indicar la institución destino del nuevo tutor', 400);
+  }
+
+  await assertInstitutionExists(institucion_id);
+
+  const existing = await db('usuarios').where({ email }).first();
+  if (existing) {
+    throw new AppError('El email ya está registrado', 409);
+  }
+
+  return db.transaction((trx) =>
+    createProvisionedInstitutionUser(
+      {
+        nombre,
+        email,
+        institucion_id,
+        rol: 'tutor',
+      },
+      trx
+    )
+  );
 };
 
 const buildInstitucionesQuery = () =>
