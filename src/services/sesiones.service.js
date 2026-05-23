@@ -9,6 +9,10 @@ import {
   CODIGO_ESTELAR_SLUG,
   CODIGO_ESTELAR_SOCKET_EVENTS,
 } from '../games/codigoEstelar/codigoEstelar.config.js';
+import {
+  buildCaminoArGameConfig,
+  CAMINO_AR_SLUG,
+} from '../games/caminoAr/caminoAr.config.js';
 
 /** Resuelve el ID de una tabla catálogo por su nombre usando la PK correcta */
 const resolveCatalogId = async (table, pkColumn, nombre) => {
@@ -129,15 +133,26 @@ const resolveInitialDifficulty = async (estudiante_id, minijuego, requestedDiffi
   return requestedDifficulty;
 };
 
-const buildRealtimeConfig = (grupoId, minijuegoSlug) => ({
-  room_key: buildRoomKey(grupoId, minijuegoSlug),
-  socket_events: SOCKET_EVENTS_BY_SLUG[minijuegoSlug] ?? {},
-});
+const buildRealtimeConfig = (grupoId, minijuegoSlug) => {
+  if (!SOCKET_EVENTS_BY_SLUG[minijuegoSlug]) {
+    return {
+      room_key: null,
+      socket_events: {},
+    };
+  }
+
+  return {
+    room_key: buildRoomKey(grupoId, minijuegoSlug),
+    socket_events: SOCKET_EVENTS_BY_SLUG[minijuegoSlug],
+  };
+};
 
 const buildGameConfig = (grupoId, minijuego, dificultad) => {
   switch (minijuego.slug) {
     case CODIGO_ESTELAR_SLUG:
       return buildCodigoEstelarGameConfig(grupoId, dificultad);
+    case CAMINO_AR_SLUG:
+      return buildCaminoArGameConfig(dificultad);
     default:
       return { dificultad };
   }
