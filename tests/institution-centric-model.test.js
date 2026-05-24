@@ -179,14 +179,24 @@ describe('🏫 Modelo institución-céntrico', () => {
     const adminOpenRes = await request(app)
       .patch(`/api/grupos/${fixture.groupId}/sesion`)
       .set(authHeader(fixture.adminToken))
-      .send({ sesion_activa: true, minijuego_id: codigoEstelarId });
+      .send({
+        sesion_activa: true,
+        modo: 'single',
+        minijuego_id: codigoEstelarId,
+        niveles: 1,
+      });
 
     expect(adminOpenRes.status).toBe(403);
 
     const tutorOpenRes = await request(app)
       .patch(`/api/grupos/${fixture.groupId}/sesion`)
       .set(authHeader(fixture.tutorToken))
-      .send({ sesion_activa: true, minijuego_id: codigoEstelarId });
+      .send({
+        sesion_activa: true,
+        modo: 'single',
+        minijuego_id: codigoEstelarId,
+        niveles: 1,
+      });
 
     expect(tutorOpenRes.status).toBe(200);
     expect(tutorOpenRes.body.data.minijuego_id).toBe(codigoEstelarId);

@@ -52,6 +52,7 @@ ON CONFLICT (nombre) DO NOTHING;
 INSERT INTO public.habilidades (nombre, descripcion) VALUES
   ('Lógica',         'Capacidad de razonamiento lógico y resolución de problemas estructurados.'),
   ('Memoria',        'Capacidad de retención y recuperación de información a corto y largo plazo.'),
+  ('Patrones',       'Capacidad de reconocer regularidades y completar secuencias visuales o lógicas.'),
   ('Atención',       'Capacidad de mantener el foco en una tarea durante un periodo de tiempo.'),
   ('Razonamiento',   'Capacidad de inferir conclusiones a partir de información dada.'),
   ('Velocidad',      'Rapidez de procesamiento cognitivo ante estímulos o problemas.')
@@ -71,44 +72,210 @@ INSERT INTO public.catalogo_logros (clave, nombre, descripcion, icono, activo) V
   ('maratonista',     'Maratonista',         'Completaste 10 partidas en la plataforma.',               '🏅', true)
 ON CONFLICT (clave) DO NOTHING;
 
--- 10. MINIJUEGO DE EJEMPLO
--- Requiere que la habilidad 'Lógica' ya exista (insertada arriba).
-INSERT INTO public.minijuegos (slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo)
+-- 10. MINIJUEGO DE EJEMPLO INTERNO
+-- Se conserva para pruebas internas, pero no se expone en el catálogo pedagógico.
+INSERT INTO public.minijuegos (
+  slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo, visible_en_catalogo, orden_catalogo
+)
 SELECT
   'logica-secuencias',
   'Secuencias Lógicas',
   'Completa la secuencia de figuras eligiendo el elemento que falta.',
   id_habilidad,
   4,
-  true
+  true,
+  false,
+  900
 FROM public.habilidades WHERE nombre = 'Lógica'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  titulo = EXCLUDED.titulo,
+  descripcion = EXCLUDED.descripcion,
+  habilidad_id = EXCLUDED.habilidad_id,
+  dificultad_maxima = EXCLUDED.dificultad_maxima,
+  activo = EXCLUDED.activo,
+  visible_en_catalogo = EXCLUDED.visible_en_catalogo,
+  orden_catalogo = EXCLUDED.orden_catalogo;
 
--- 10.1 MINIJUEGO OFICIAL MVP: CODIGO ESTELAR
--- Competencia de clasificacion numerica en tiempo real por sala.
-INSERT INTO public.minijuegos (slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo)
+-- 10.1 MINIJUEGO INTERNO: CODIGO ESTELAR
+-- Se conserva para sockets y pruebas de realtime, no como juego oficial visible.
+INSERT INTO public.minijuegos (
+  slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo, visible_en_catalogo, orden_catalogo
+)
 SELECT
   'codigo-estelar',
   'Código Estelar',
   'Clasifica meteoritos comparando números con un objetivo central en una sala competitiva en tiempo real.',
   id_habilidad,
   4,
-  true
+  true,
+  false,
+  910
 FROM public.habilidades WHERE nombre = 'Lógica'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  titulo = EXCLUDED.titulo,
+  descripcion = EXCLUDED.descripcion,
+  habilidad_id = EXCLUDED.habilidad_id,
+  dificultad_maxima = EXCLUDED.dificultad_maxima,
+  activo = EXCLUDED.activo,
+  visible_en_catalogo = EXCLUDED.visible_en_catalogo,
+  orden_catalogo = EXCLUDED.orden_catalogo;
 
--- 10.2 MINIJUEGO OFICIAL MVP: CAMINO AR
--- Memoria secuencial sobre un recorrido de baldosas.
-INSERT INTO public.minijuegos (slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo)
+-- 10.2 CATÁLOGO OFICIAL DE MINIJUEGOS
+INSERT INTO public.minijuegos (
+  slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo, visible_en_catalogo, orden_catalogo
+)
 SELECT
   'camino-ar',
   'Camino AR',
   'Memoriza un recorrido iluminado y repitelo tocando las baldosas en el mismo orden.',
   id_habilidad,
   4,
-  true
+  true,
+  true,
+  1
 FROM public.habilidades WHERE nombre = 'Memoria'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  titulo = EXCLUDED.titulo,
+  descripcion = EXCLUDED.descripcion,
+  habilidad_id = EXCLUDED.habilidad_id,
+  dificultad_maxima = EXCLUDED.dificultad_maxima,
+  activo = EXCLUDED.activo,
+  visible_en_catalogo = EXCLUDED.visible_en_catalogo,
+  orden_catalogo = EXCLUDED.orden_catalogo;
+
+INSERT INTO public.minijuegos (
+  slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo, visible_en_catalogo, orden_catalogo
+)
+SELECT
+  'tren-figuras',
+  'Tren de Figuras',
+  'Completa el patrón del tren arrastrando la figura correcta al vagón vacío.',
+  id_habilidad,
+  4,
+  true,
+  true,
+  2
+FROM public.habilidades WHERE nombre = 'Patrones'
+ON CONFLICT (slug) DO UPDATE SET
+  titulo = EXCLUDED.titulo,
+  descripcion = EXCLUDED.descripcion,
+  habilidad_id = EXCLUDED.habilidad_id,
+  dificultad_maxima = EXCLUDED.dificultad_maxima,
+  activo = EXCLUDED.activo,
+  visible_en_catalogo = EXCLUDED.visible_en_catalogo,
+  orden_catalogo = EXCLUDED.orden_catalogo;
+
+INSERT INTO public.minijuegos (
+  slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo, visible_en_catalogo, orden_catalogo
+)
+SELECT
+  'robot-logico',
+  'Robot Lógico',
+  'Resuelve retos de lógica para ensamblar correctamente las piezas del robot.',
+  id_habilidad,
+  4,
+  true,
+  true,
+  3
+FROM public.habilidades WHERE nombre = 'Lógica'
+ON CONFLICT (slug) DO UPDATE SET
+  titulo = EXCLUDED.titulo,
+  descripcion = EXCLUDED.descripcion,
+  habilidad_id = EXCLUDED.habilidad_id,
+  dificultad_maxima = EXCLUDED.dificultad_maxima,
+  activo = EXCLUDED.activo,
+  visible_en_catalogo = EXCLUDED.visible_en_catalogo,
+  orden_catalogo = EXCLUDED.orden_catalogo;
+
+INSERT INTO public.minijuegos (
+  slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo, visible_en_catalogo, orden_catalogo
+)
+SELECT
+  'mercado-inteligente',
+  'Mercado Inteligente',
+  'Administra monedas limitadas para comprar productos sin pasarte del presupuesto.',
+  id_habilidad,
+  4,
+  true,
+  true,
+  4
+FROM public.habilidades WHERE nombre = 'Razonamiento'
+ON CONFLICT (slug) DO UPDATE SET
+  titulo = EXCLUDED.titulo,
+  descripcion = EXCLUDED.descripcion,
+  habilidad_id = EXCLUDED.habilidad_id,
+  dificultad_maxima = EXCLUDED.dificultad_maxima,
+  activo = EXCLUDED.activo,
+  visible_en_catalogo = EXCLUDED.visible_en_catalogo,
+  orden_catalogo = EXCLUDED.orden_catalogo;
+
+INSERT INTO public.minijuegos (
+  slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo, visible_en_catalogo, orden_catalogo
+)
+SELECT
+  'objeto-perdido',
+  'Encuentra el Objeto Perdido',
+  'Explora la escena y encuentra el objeto indicado antes de que se acabe el tiempo.',
+  id_habilidad,
+  4,
+  true,
+  true,
+  5
+FROM public.habilidades WHERE nombre = 'Atención'
+ON CONFLICT (slug) DO UPDATE SET
+  titulo = EXCLUDED.titulo,
+  descripcion = EXCLUDED.descripcion,
+  habilidad_id = EXCLUDED.habilidad_id,
+  dificultad_maxima = EXCLUDED.dificultad_maxima,
+  activo = EXCLUDED.activo,
+  visible_en_catalogo = EXCLUDED.visible_en_catalogo,
+  orden_catalogo = EXCLUDED.orden_catalogo;
+
+-- 10.3 RUTA PEDAGÓGICA OFICIAL
+INSERT INTO public.rutas_pedagogicas (
+  slug, nombre, descripcion, activo, visible_en_catalogo, orden_catalogo
+)
+VALUES (
+  'ruta-completa-habilidades',
+  'Ruta Completa de Habilidades',
+  'Recorre los cinco minijuegos oficiales en el orden pedagógico definido por LogicKids.',
+  true,
+  true,
+  1
+)
+ON CONFLICT (slug) DO UPDATE SET
+  nombre = EXCLUDED.nombre,
+  descripcion = EXCLUDED.descripcion,
+  activo = EXCLUDED.activo,
+  visible_en_catalogo = EXCLUDED.visible_en_catalogo,
+  orden_catalogo = EXCLUDED.orden_catalogo;
+
+DELETE FROM public.ruta_pedagogica_bloques
+WHERE ruta_pedagogica_id = (
+  SELECT id_ruta_pedagogica
+  FROM public.rutas_pedagogicas
+  WHERE slug = 'ruta-completa-habilidades'
+);
+
+INSERT INTO public.ruta_pedagogica_bloques (ruta_pedagogica_id, orden, minijuego_id, niveles)
+SELECT
+  ruta.id_ruta_pedagogica,
+  bloque.orden,
+  juego.id_minijuego,
+  bloque.niveles
+FROM public.rutas_pedagogicas ruta
+JOIN (
+  VALUES
+    (1, 'camino-ar', 1),
+    (2, 'tren-figuras', 1),
+    (3, 'robot-logico', 1),
+    (4, 'mercado-inteligente', 1),
+    (5, 'objeto-perdido', 1)
+) AS bloque(orden, slug, niveles)
+  ON TRUE
+JOIN public.minijuegos juego
+  ON juego.slug = bloque.slug
+WHERE ruta.slug = 'ruta-completa-habilidades';
 
 -- 11. SUPERADMIN INICIAL
 -- Contraseña: SuperAdmin2025! (cambiar en producción)

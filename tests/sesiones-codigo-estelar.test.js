@@ -119,99 +119,125 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
   it(
     '✅ soporta una sesión path y guarda una partida por cada paso del recorrido',
     async () => {
-    const codigoEstelarId = await resolveCodigoEstelarId();
-    const fixture = await provisionPlayableStudent({ openClass: false });
+      const codigoEstelarId = await resolveCodigoEstelarId();
+      const fixture = await provisionPlayableStudent({ openClass: false });
+      const routeSlug = `ruta-test-codigo-estelar-${Date.now()}`;
 
-    const openPathRes = await request(app)
-      .patch(`/api/grupos/${fixture.groupId}/sesion`)
-      .set(authHeader(fixture.tutorToken))
-      .send({
-        sesion_activa: true,
-        modo: 'path',
-        pasos: [
-          {
-            minijuego_id: codigoEstelarId,
-            configuracion_base: { tutorial: false, velocidad_base_ms: 900 },
-          },
-          {
-            minijuego_id: codigoEstelarId,
-            configuracion_base: { tutorial: true, velocidad_base_ms: 700 },
-          },
-        ],
+      const [route] = await db('rutas_pedagogicas')
+        .insert({
+          slug: routeSlug,
+          nombre: 'Ruta temporal Código Estelar',
+          descripcion: 'Ruta mínima para validar la expansión path.',
+          activo: true,
+          visible_en_catalogo: false,
+          orden_catalogo: 999,
+        })
+        .returning('id_ruta_pedagogica');
+
+      await db('ruta_pedagogica_bloques').insert([
+        {
+          ruta_pedagogica_id: route.id_ruta_pedagogica,
+          orden: 1,
+          minijuego_id: codigoEstelarId,
+          niveles: 1,
+          configuracion_base: { tutorial: false, velocidad_base_ms: 900 },
+        },
+        {
+          ruta_pedagogica_id: route.id_ruta_pedagogica,
+          orden: 2,
+          minijuego_id: codigoEstelarId,
+          niveles: 1,
+          configuracion_base: { tutorial: true, velocidad_base_ms: 700 },
+        },
+      ]);
+
+      const openPathRes = await request(app)
+        .patch(`/api/grupos/${fixture.groupId}/sesion`)
+        .set(authHeader(fixture.tutorToken))
+        .send({
+          sesion_activa: true,
+          modo: 'path',
+          ruta_id: route.id_ruta_pedagogica,
+        });
+
+      expect(openPathRes.status).toBe(200);
+      expect(openPathRes.body.data.sesion_modo).toBe('path');
+      expect(openPathRes.body.data.sesion_total_pasos).toBe(2);
+      expect(openPathRes.body.data.sesion_ruta_id).toBe(route.id_ruta_pedagogica);
+
+      const firstStartRes = await request(app)
+        .post('/api/sesiones/iniciar')
+        .set(authHeader(fixture.studentToken))
+        .send({});
+
+      expect(firstStartRes.status).toBe(201);
+      expect(firstStartRes.body.data.sesion.orden_en_ruta).toBe(1);
+      expect(firstStartRes.body.data.sesion.modo).toBe('path');
+      expect(firstStartRes.body.data.sesion.bloque_orden).toBe(1);
+      expect(firstStartRes.body.data.sesion.nivel_en_bloque).toBe(1);
+      expect(firstStartRes.body.data.game_config.tutorial).toBe(false);
+      expect(firstStartRes.body.data.game_config.velocidad_base_ms).toBe(900);
+
+      const firstFinalizeRes = await request(app)
+        .post(`/api/sesiones/${firstStartRes.body.data.sesion.id}/finalizar`)
+        .set(authHeader(fixture.studentToken))
+        .send({ estado: 'completado' });
+
+      expect(firstFinalizeRes.status).toBe(200);
+      expect(firstFinalizeRes.body.data.progreso_ruta).toMatchObject({
+        haySiguientePaso: true,
+        participanteEstado: 'pendiente',
       });
 
-    expect(openPathRes.status).toBe(200);
-    expect(openPathRes.body.data.sesion_modo).toBe('path');
-    expect(openPathRes.body.data.sesion_total_pasos).toBe(2);
+      const secondStartRes = await request(app)
+        .post('/api/sesiones/iniciar')
+        .set(authHeader(fixture.studentToken))
+        .send({});
 
-    const firstStartRes = await request(app)
-      .post('/api/sesiones/iniciar')
-      .set(authHeader(fixture.studentToken))
-      .send({});
+      expect(secondStartRes.status).toBe(201);
+      expect(secondStartRes.body.data.sesion.orden_en_ruta).toBe(2);
+      expect(secondStartRes.body.data.sesion.bloque_orden).toBe(2);
+      expect(secondStartRes.body.data.sesion.nivel_en_bloque).toBe(1);
+      expect(secondStartRes.body.data.game_config.tutorial).toBe(true);
+      expect(secondStartRes.body.data.game_config.velocidad_base_ms).toBe(700);
 
-    expect(firstStartRes.status).toBe(201);
-    expect(firstStartRes.body.data.sesion.orden_en_ruta).toBe(1);
-    expect(firstStartRes.body.data.sesion.modo).toBe('path');
-    expect(firstStartRes.body.data.game_config.tutorial).toBe(false);
-    expect(firstStartRes.body.data.game_config.velocidad_base_ms).toBe(900);
+      const secondFinalizeRes = await request(app)
+        .post(`/api/sesiones/${secondStartRes.body.data.sesion.id}/finalizar`)
+        .set(authHeader(fixture.studentToken))
+        .send({ estado: 'completado' });
 
-    const firstFinalizeRes = await request(app)
-      .post(`/api/sesiones/${firstStartRes.body.data.sesion.id}/finalizar`)
-      .set(authHeader(fixture.studentToken))
-      .send({ estado: 'completado' });
+      expect(secondFinalizeRes.status).toBe(200);
+      expect(secondFinalizeRes.body.data.progreso_ruta).toMatchObject({
+        haySiguientePaso: false,
+        participanteEstado: 'completado',
+      });
 
-    expect(firstFinalizeRes.status).toBe(200);
-    expect(firstFinalizeRes.body.data.progreso_ruta).toMatchObject({
-      haySiguientePaso: true,
-      participanteEstado: 'pendiente',
-    });
+      const studentProfileRes = await request(app)
+        .get('/api/estudiantes/mi-perfil')
+        .set(authHeader(fixture.studentToken));
 
-    const secondStartRes = await request(app)
-      .post('/api/sesiones/iniciar')
-      .set(authHeader(fixture.studentToken))
-      .send({});
+      expect(studentProfileRes.status).toBe(200);
+      expect(studentProfileRes.body.data.sesion_activa).toBe(false);
 
-    expect(secondStartRes.status).toBe(201);
-    expect(secondStartRes.body.data.sesion.orden_en_ruta).toBe(2);
-    expect(secondStartRes.body.data.game_config.tutorial).toBe(true);
-    expect(secondStartRes.body.data.game_config.velocidad_base_ms).toBe(700);
+      const sesionClase = await db('sesiones_clase')
+        .where({ id_sesion_clase: firstStartRes.body.data.sesion.sesion_clase_id })
+        .select('estado', 'cerrada_en', 'ruta_pedagogica_id')
+        .first();
 
-    const secondFinalizeRes = await request(app)
-      .post(`/api/sesiones/${secondStartRes.body.data.sesion.id}/finalizar`)
-      .set(authHeader(fixture.studentToken))
-      .send({ estado: 'completado' });
+      expect(sesionClase.estado).toBe('cerrada');
+      expect(sesionClase.cerrada_en).not.toBeNull();
+      expect(sesionClase.ruta_pedagogica_id).toBe(route.id_ruta_pedagogica);
 
-    expect(secondFinalizeRes.status).toBe(200);
-    expect(secondFinalizeRes.body.data.progreso_ruta).toMatchObject({
-      haySiguientePaso: false,
-      participanteEstado: 'completado',
-    });
+      const sesionesRuta = await db('sesiones_juego')
+        .where({ sesion_clase_id: firstStartRes.body.data.sesion.sesion_clase_id })
+        .orderBy('orden_en_ruta', 'asc')
+        .select('orden_en_ruta', 'configuracion_aplicada');
 
-    const studentProfileRes = await request(app)
-      .get('/api/estudiantes/mi-perfil')
-      .set(authHeader(fixture.studentToken));
-
-    expect(studentProfileRes.status).toBe(200);
-    expect(studentProfileRes.body.data.sesion_activa).toBe(false);
-
-    const sesionClase = await db('sesiones_clase')
-      .where({ id_sesion_clase: firstStartRes.body.data.sesion.sesion_clase_id })
-      .select('estado', 'cerrada_en')
-      .first();
-
-    expect(sesionClase.estado).toBe('cerrada');
-    expect(sesionClase.cerrada_en).not.toBeNull();
-
-    const sesionesRuta = await db('sesiones_juego')
-      .where({ sesion_clase_id: firstStartRes.body.data.sesion.sesion_clase_id })
-      .orderBy('orden_en_ruta', 'asc')
-      .select('orden_en_ruta', 'configuracion_aplicada');
-
-    expect(sesionesRuta).toHaveLength(2);
-    expect(sesionesRuta[0].orden_en_ruta).toBe(1);
-    expect(sesionesRuta[0].configuracion_aplicada.tutorial).toBe(false);
-    expect(sesionesRuta[1].orden_en_ruta).toBe(2);
-    expect(sesionesRuta[1].configuracion_aplicada.tutorial).toBe(true);
+      expect(sesionesRuta).toHaveLength(2);
+      expect(sesionesRuta[0].orden_en_ruta).toBe(1);
+      expect(sesionesRuta[0].configuracion_aplicada.tutorial).toBe(false);
+      expect(sesionesRuta[1].orden_en_ruta).toBe(2);
+      expect(sesionesRuta[1].configuracion_aplicada.tutorial).toBe(true);
     },
     30_000
   );

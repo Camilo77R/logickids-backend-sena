@@ -78,8 +78,13 @@ const enrichStudentWithActiveSession = async (student, executor = db) => {
       sesion_activa: false,
       sesion_clase_id: null,
       sesion_modo: null,
+      sesion_ruta_id: null,
+      sesion_ruta_slug: null,
+      sesion_ruta_nombre: null,
       sesion_total_pasos: 0,
       sesion_paso_actual: null,
+      sesion_bloque_actual: null,
+      sesion_nivel_en_bloque: null,
       sesion_participante_estado: null,
       sesion_minijuego_id: null,
       sesion_minijuego_slug: null,
@@ -98,11 +103,18 @@ const enrichStudentWithActiveSession = async (student, executor = db) => {
 
   return {
     ...student,
-    sesion_activa: Boolean(resumenSesion),
+    sesion_activa: ['pendiente', 'en_progreso'].includes(
+      resumenSesion?.sesion_participante_estado ?? ''
+    ),
     sesion_clase_id: resumenSesion?.sesion_clase_id ?? null,
     sesion_modo: resumenSesion?.sesion_modo ?? null,
+    sesion_ruta_id: resumenSesion?.sesion_ruta_id ?? null,
+    sesion_ruta_slug: resumenSesion?.sesion_ruta_slug ?? null,
+    sesion_ruta_nombre: resumenSesion?.sesion_ruta_nombre ?? null,
     sesion_total_pasos: Number(resumenSesion?.sesion_total_pasos ?? 0),
     sesion_paso_actual: resumenSesion?.sesion_paso_actual ?? null,
+    sesion_bloque_actual: resumenSesion?.sesion_bloque_actual ?? null,
+    sesion_nivel_en_bloque: resumenSesion?.sesion_nivel_en_bloque ?? null,
     sesion_participante_estado: resumenSesion?.sesion_participante_estado ?? null,
     sesion_minijuego_id: resumenSesion?.sesion_minijuego_id ?? null,
     sesion_minijuego_slug: resumenSesion?.sesion_minijuego_slug ?? null,

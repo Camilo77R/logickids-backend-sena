@@ -195,10 +195,20 @@ export const assertSessionBelongsToUser = async (sessionId, user, trx = db) => {
 export const getActiveStudentIdsByGroup = async (grupoId, user, trx = db) => {
   await assertGroupBelongsToUser(grupoId, user, trx);
 
-  const rows = await trx('estudiante_grupo_historial')
-    .where({ grupo_id: grupoId, activo: true })
-    .whereNull('fecha_fin')
-    .select('estudiante_id');
+  const rows = await trx('estudiante_grupo_historial as egh')
+    .join('estudiantes', 'estudiantes.id_estudiante', 'egh.estudiante_id')
+    .join(
+      'estados_estudiante',
+      'estados_estudiante.id_estado_estudiante',
+      'estudiantes.estado_id'
+    )
+    .where({
+      'egh.grupo_id': grupoId,
+      'egh.activo': true,
+      'estados_estudiante.nombre': 'activo',
+    })
+    .whereNull('egh.fecha_fin')
+    .select('egh.estudiante_id');
 
   return rows.map(({ estudiante_id }) => estudiante_id);
 };

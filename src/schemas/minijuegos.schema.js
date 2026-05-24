@@ -33,6 +33,14 @@ export const crearMinijuegoSchema = z.object({
     .min(1, 'La dificultad máxima mínima es 1')
     .max(10, 'La dificultad máxima no puede superar 10')
     .optional(),
+
+  visible_en_catalogo: z.boolean().optional(),
+
+  orden_catalogo: z
+    .number({ invalid_type_error: 'El orden del catálogo debe ser un número' })
+    .int()
+    .min(1, 'El orden del catálogo debe ser positivo')
+    .optional(),
 });
 
 /** PATCH /api/minijuegos/:id/estado — toggle activo */

@@ -8,17 +8,32 @@ export const buildCodigoEstelarSuffix = (label = 'codigo-estelar') =>
 
 export const authHeader = (token) => ({ Authorization: `Bearer ${token}` });
 
-export const resolveCodigoEstelarId = async () => {
+export const resolveMinijuegoIdBySlug = async (slug) => {
   const minijuego = await db('minijuegos')
-    .where({ slug: 'codigo-estelar' })
+    .where({ slug })
     .select('id_minijuego')
     .first();
 
   if (!minijuego) {
-    throw new Error('El minijuego codigo-estelar no existe en la base de datos de pruebas.');
+    throw new Error(`El minijuego ${slug} no existe en la base de datos de pruebas.`);
   }
 
   return minijuego.id_minijuego;
+};
+
+export const resolveCodigoEstelarId = async () => resolveMinijuegoIdBySlug('codigo-estelar');
+
+export const resolveRutaPedagogicaIdBySlug = async (slug) => {
+  const route = await db('rutas_pedagogicas')
+    .where({ slug })
+    .select('id_ruta_pedagogica')
+    .first();
+
+  if (!route) {
+    throw new Error(`La ruta pedagógica ${slug} no existe en la base de datos de pruebas.`);
+  }
+
+  return route.id_ruta_pedagogica;
 };
 
 /**
@@ -131,7 +146,12 @@ export const provisionPlayableStudent = async ({
     const openClassRes = await request(app)
       .patch(`/api/grupos/${groupId}/sesion`)
       .set(authHeader(tutorToken))
-      .send({ sesion_activa: true, minijuego_id: codigoEstelarId });
+      .send({
+        sesion_activa: true,
+        modo: 'single',
+        minijuego_id: codigoEstelarId,
+        niveles: 1,
+      });
 
     if (openClassRes.status !== 200) {
       throw new Error(`No se pudo abrir la clase: ${JSON.stringify(openClassRes.body)}`);

@@ -57,17 +57,16 @@ export const toggleSesionGrupoSchema = z
       .int()
       .positive('El ID del minijuego debe ser positivo')
       .optional(),
-    pasos: z
-      .array(
-        z.object({
-          minijuego_id: z
-            .number({ invalid_type_error: 'El ID del minijuego debe ser un número' })
-            .int()
-            .positive('El ID del minijuego debe ser positivo'),
-          configuracion_base: z.record(z.any()).optional(),
-        })
-      )
-      .max(25, 'La sesión no puede tener más de 25 pasos configurados')
+    niveles: z
+      .number({ invalid_type_error: 'La cantidad de niveles debe ser un número' })
+      .int()
+      .min(1, 'La sesión debe tener al menos un nivel')
+      .max(10, 'La sesión no puede superar 10 niveles por bloque')
+      .optional(),
+    ruta_id: z
+      .number({ invalid_type_error: 'El ID de la ruta debe ser un número' })
+      .int()
+      .positive('El ID de la ruta debe ser positivo')
       .optional(),
   })
   .superRefine((data, ctx) => {
@@ -75,30 +74,57 @@ export const toggleSesionGrupoSchema = z
       return;
     }
 
-    const tienePasos = Array.isArray(data.pasos) && data.pasos.length > 0;
-    const tieneMinijuegoSingle = Boolean(data.minijuego_id);
-
-    if (!tienePasos && !tieneMinijuegoSingle) {
+    if (!data.modo) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['minijuego_id'],
-        message: 'Debes indicar un minijuego o una ruta de pasos para abrir la sesión del grupo',
+        path: ['modo'],
+        message: 'Debes indicar si la actividad es single o path',
       });
+
+      return;
     }
 
-    if (data.modo === 'single' && tienePasos && data.pasos.length !== 1) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['pasos'],
-        message: 'Una sesión single solo puede abrirse con un paso',
-      });
+    if (data.modo === 'single') {
+      if (!data.minijuego_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['minijuego_id'],
+          message: 'Debes indicar el minijuego de la actividad single',
+        });
+      }
+
+      if (data.ruta_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ruta_id'],
+          message: 'Una actividad single no recibe ruta pedagógica',
+        });
+      }
     }
 
-    if (data.modo === 'path' && (!tienePasos || data.pasos.length < 2)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['pasos'],
-        message: 'Una sesión path requiere al menos dos minijuegos',
-      });
+    if (data.modo === 'path') {
+      if (!data.ruta_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ruta_id'],
+          message: 'Debes indicar la ruta pedagógica para abrir una actividad path',
+        });
+      }
+
+      if (data.minijuego_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['minijuego_id'],
+          message: 'Una actividad path no se abre con un minijuego individual',
+        });
+      }
+
+      if (data.niveles != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['niveles'],
+          message: 'La cantidad de niveles de una actividad path la define la ruta pedagógica',
+        });
+      }
     }
   });

@@ -71,8 +71,11 @@ const resolvePlayableStudentContext = async (estudiante_id) =>
       'grupos.activo as grupo_activo',
       'sc.id_sesion_clase as sesion_clase_id',
       'sc.modo as sesion_modo',
+      'sc.ruta_pedagogica_id as sesion_ruta_id',
       'participante.estado as sesion_participante_estado',
       'participante.paso_actual as sesion_paso_actual',
+      'paso.bloque_orden as sesion_bloque_actual',
+      'paso.nivel_en_bloque as sesion_nivel_en_bloque',
       'paso.minijuego_id as sesion_minijuego_id',
       'paso.configuracion_base as sesion_configuracion_base'
     )
@@ -188,8 +191,8 @@ const buildGameConfig = (grupoId, minijuego, dificultad, configuracionBase = {})
   switch (minijuego.slug) {
     case CODIGO_ESTELAR_SLUG:
       return {
-        ...configuracionNormalizada,
         ...buildCodigoEstelarGameConfig(grupoId, dificultad),
+        ...configuracionNormalizada,
         dificultad,
       };
     case CAMINO_AR_SLUG:
@@ -206,7 +209,10 @@ const buildSessionStartResponse = ({
   dificultad,
   sesionClaseId,
   sesionModo,
+  rutaPedagogicaId,
   ordenEnRuta,
+  bloqueActual,
+  nivelEnBloque,
   gameConfig,
 }) => ({
   sesion: {
@@ -217,7 +223,10 @@ const buildSessionStartResponse = ({
     minijuego_id: minijuego.id,
     minijuego_slug: minijuego.slug,
     modo: sesionModo,
+    ruta_pedagogica_id: rutaPedagogicaId,
     orden_en_ruta: ordenEnRuta,
+    bloque_orden: bloqueActual,
+    nivel_en_bloque: nivelEnBloque,
   },
   realtime: buildRealtimeConfig(grupoId, minijuego.slug),
   game_config: gameConfig,
@@ -455,7 +464,10 @@ export const iniciar = async (estudiante_id, { minijuego_id, dificultad: request
     dificultad,
     sesionClaseId: playableContext.sesion_clase_id,
     sesionModo: playableContext.sesion_modo,
+    rutaPedagogicaId: playableContext.sesion_ruta_id,
     ordenEnRuta: playableContext.sesion_paso_actual ?? 1,
+    bloqueActual: playableContext.sesion_bloque_actual ?? 1,
+    nivelEnBloque: playableContext.sesion_nivel_en_bloque ?? 1,
     gameConfig,
   });
 };
