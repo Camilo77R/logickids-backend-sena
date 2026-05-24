@@ -67,11 +67,3 @@ export const cambiarGrupoEstudianteSchema = z.object({
     .positive('El ID de grupo debe ser un número positivo'),
 });
 
-/** PATCH /api/estudiantes/:id/sesion */
-export const toggleSesionSchema = z.object({
-  sesion_activa: z.boolean({
-    required_error: 'El campo sesion_activa es obligatorio',
-    invalid_type_error: 'El campo sesion_activa debe ser true o false',
-  }),
-});
-

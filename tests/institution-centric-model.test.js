@@ -233,12 +233,19 @@ describe('🏫 Modelo institución-céntrico', () => {
     expect(moveRes.status).toBe(200);
     expect(moveRes.body.data.grupo_id).toBe(secondGroupId);
 
-    const currentStudent = await db('estudiantes')
-      .where({ id_estudiante: fixture.studentId })
-      .select('sesion_activa')
-      .first();
+    const studentProfileRes = await request(app)
+      .get('/api/estudiantes/mi-perfil')
+      .set(authHeader(fixture.studentToken));
 
-    expect(currentStudent.sesion_activa).toBe(false);
+    expect(studentProfileRes.status).toBe(200);
+    expect(studentProfileRes.body.data.grupo_id).toBe(secondGroupId);
+    expect(studentProfileRes.body.data.sesion_activa).toBe(false);
+
+    const participacionesActivas = await db('sesion_clase_participantes')
+      .where({ estudiante_id: fixture.studentId })
+      .whereIn('estado', ['pendiente', 'en_progreso']);
+
+    expect(participacionesActivas).toHaveLength(0);
 
     const historyRows = await db('estudiante_grupo_historial')
       .where({ estudiante_id: fixture.studentId })

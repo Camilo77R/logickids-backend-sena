@@ -7,7 +7,6 @@ import {
   crearEstudianteSchema,
   actualizarEstudianteSchema,
   cambiarGrupoEstudianteSchema,
-  toggleSesionSchema,
 } from '../schemas/estudiantes.schema.js';
 
 const router = Router();
@@ -28,6 +27,5 @@ router.patch('/:id/grupo', requireRole('admin'), validate(cambiarGrupoEstudiante
 router.delete('/:id', requireRole('admin'), ctrl.desactivar);
 router.patch('/:id/reactivar', requireRole('admin'), ctrl.reactivar);
 router.get('/:id/qr', requireRole('admin', 'tutor'), ctrl.obtenerQr);
-router.patch('/:id/sesion', requireRole('tutor'), validate(toggleSesionSchema), ctrl.toggleSesion);
 
 export default router;

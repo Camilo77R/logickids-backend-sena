@@ -121,7 +121,6 @@ export const assertGroupBelongsToUser = async (grupoId, user, trx = db) => {
       'grupos.id_grupo',
       'grupos.creado_por_usuario_id',
       'grupos.tutor_asignado_id',
-      'grupos.sesion_minijuego_id',
       'grupos.nombre',
       'grupos.institucion_id',
       'grupos.activo',
