@@ -17,6 +17,11 @@ lk-*.log
 .env.*
 !.env.example
 
+# Python
+__pycache__/
+*.pyc
+.venv/
+
 # OS
 .DS_Store
 Thumbs.db
