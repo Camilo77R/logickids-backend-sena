@@ -2,6 +2,12 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { db } from '../config/db.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import {
+  cerrarSesionClasePorGrupo,
+  ESTADOS_SESION_CLASE,
+  obtenerSesionClaseActivaPorGrupo,
+} from './sesionesClase.service.js';
+import { abandonarSesionesActivasDeClase } from './sesiones.service.js';
 
 const WEB_USER_FIELDS = [
   'usuarios.id_usuario as id',
@@ -473,9 +479,31 @@ export const desactivarInstitucion = async (id_institucion) => {
   }
 
   return db.transaction(async (trx) => {
-    await trx('estudiantes')
+    const gruposActivos = await trx('grupos')
       .where({ institucion_id: id_institucion })
-      .update({ sesion_activa: false, actualizado_en: trx.fn.now() });
+      .select('id_grupo');
+
+    for (const grupo of gruposActivos) {
+      const sesionClase = await obtenerSesionClaseActivaPorGrupo(grupo.id_grupo, trx);
+      if (!sesionClase) {
+        continue;
+      }
+
+      await abandonarSesionesActivasDeClase(
+        sesionClase.id,
+        { estadoSesionJuego: 'abandonado' },
+        trx
+      );
+
+      await cerrarSesionClasePorGrupo(
+        {
+          grupoId: grupo.id_grupo,
+          estado: ESTADOS_SESION_CLASE.cancelada,
+          cierreMotivo: 'institucion_desactivada',
+        },
+        trx
+      );
+    }
 
     const [updated] = await trx('instituciones')
       .where({ id_institucion })

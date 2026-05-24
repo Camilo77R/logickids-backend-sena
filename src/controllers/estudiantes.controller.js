@@ -71,13 +71,6 @@ export const obtenerQr = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-export const toggleSesion = async (req, res, next) => {
-  try {
-    await svc.toggleSesion(Number(req.params.id), req.user, req.body.sesion_activa);
-    ok(res, { actualizado: true }, `Sesión ${req.body.sesion_activa ? 'activada' : 'desactivada'} correctamente`);
-  } catch (e) { next(e); }
-};
-
 export const cambiarGrupo = async (req, res, next) => {
   try {
     const data = await svc.cambiarGrupo(Number(req.params.id), req.user, req.body.grupo_id);

@@ -97,6 +97,19 @@ SELECT
 FROM public.habilidades WHERE nombre = 'Lógica'
 ON CONFLICT (slug) DO NOTHING;
 
+-- 10.2 MINIJUEGO OFICIAL MVP: CAMINO AR
+-- Memoria secuencial sobre un recorrido de baldosas.
+INSERT INTO public.minijuegos (slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo)
+SELECT
+  'camino-ar',
+  'Camino AR',
+  'Memoriza un recorrido iluminado y repitelo tocando las baldosas en el mismo orden.',
+  id_habilidad,
+  4,
+  true
+FROM public.habilidades WHERE nombre = 'Memoria'
+ON CONFLICT (slug) DO NOTHING;
+
 -- 11. SUPERADMIN INICIAL
 -- Contraseña: SuperAdmin2025! (cambiar en producción)
 -- Hash generado con bcrypt, costo 10.

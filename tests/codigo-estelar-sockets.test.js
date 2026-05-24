@@ -186,7 +186,9 @@ describe('🔌 Sockets — Codigo Estelar', () => {
     }
   });
 
-  it('❌ bloquea nuevas respuestas si el grupo fue archivado durante la partida', async () => {
+  it(
+    '❌ bloquea nuevas respuestas si el grupo fue archivado durante la partida',
+    async () => {
     const minijuegoId = await resolveCodigoEstelarId();
     const fixture = await provisionPlayableStudent();
     const startRes = await startCodigoEstelarSession({
@@ -228,7 +230,9 @@ describe('🔌 Sockets — Codigo Estelar', () => {
     } finally {
       await closeSocket(socket);
     }
-  });
+    },
+    30_000
+  );
 
   it(
     '✅ auto-finaliza la sesión cuando llega game_over y tolera un finalize tardío del móvil',

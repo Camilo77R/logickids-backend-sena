@@ -86,7 +86,6 @@ CREATE TABLE IF NOT EXISTS public.estudiantes
     edad integer NOT NULL,
     color_avatar character varying(7) COLLATE pg_catalog."default" NOT NULL DEFAULT '#3B82F6'::character varying,
     qr_token character varying(120) COLLATE pg_catalog."default" NOT NULL,
-    sesion_activa boolean NOT NULL DEFAULT false,
     estado_id integer NOT NULL DEFAULT 1,
     creado_en timestamp with time zone NOT NULL DEFAULT now(),
     actualizado_en timestamp with time zone NOT NULL DEFAULT now(),
@@ -104,6 +103,7 @@ CREATE TABLE IF NOT EXISTS public.eventos_sesion
     tiempo_reaccion_ms integer,
     puntos integer NOT NULL DEFAULT 0,
     combo_en_evento integer NOT NULL DEFAULT 0,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
     ocurrido_en timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT eventos_sesion_pkey PRIMARY KEY (id_evento_sesion)
 );
@@ -113,7 +113,6 @@ CREATE TABLE IF NOT EXISTS public.grupos
     id_grupo integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
     creado_por_usuario_id integer NOT NULL,
     tutor_asignado_id integer,
-    sesion_minijuego_id integer,
     nombre character varying(100) COLLATE pg_catalog."default" NOT NULL,
     descripcion character varying(255) COLLATE pg_catalog."default",
     predeterminado boolean NOT NULL DEFAULT false,
@@ -225,6 +224,56 @@ CREATE TABLE IF NOT EXISTS public.roles
     CONSTRAINT roles_nombre_key UNIQUE (nombre)
 );
 
+CREATE TABLE IF NOT EXISTS public.sesiones_clase
+(
+    id_sesion_clase integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    grupo_id integer NOT NULL,
+    tutor_responsable_id integer NOT NULL,
+    abierta_por_usuario_id integer NOT NULL,
+    modo character varying(20) COLLATE pg_catalog."default" NOT NULL,
+    estado character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'activa'::character varying,
+    abierta_en timestamp with time zone NOT NULL DEFAULT now(),
+    cerrada_en timestamp with time zone,
+    cierre_motivo character varying(30) COLLATE pg_catalog."default",
+    actualizada_en timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT sesiones_clase_pkey PRIMARY KEY (id_sesion_clase),
+    CONSTRAINT ck_sesiones_clase_modo CHECK (modo::text = ANY (ARRAY['single'::character varying, 'path'::character varying]::text[])),
+    CONSTRAINT ck_sesiones_clase_estado CHECK (estado::text = ANY (ARRAY['activa'::character varying, 'cerrada'::character varying, 'cancelada'::character varying]::text[])),
+    CONSTRAINT ck_sesiones_clase_consistente CHECK (
+        (estado::text = 'activa'::text AND cerrada_en IS NULL AND cierre_motivo IS NULL) OR
+        (estado::text = ANY (ARRAY['cerrada'::character varying, 'cancelada'::character varying]::text[]) AND cerrada_en IS NOT NULL)
+    )
+);
+
+CREATE TABLE IF NOT EXISTS public.sesion_clase_pasos
+(
+    id_sesion_clase_paso integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    sesion_clase_id integer NOT NULL,
+    orden integer NOT NULL,
+    minijuego_id integer NOT NULL,
+    configuracion_base jsonb NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT sesion_clase_pasos_pkey PRIMARY KEY (id_sesion_clase_paso),
+    CONSTRAINT ck_sesion_clase_pasos_orden CHECK (orden > 0),
+    CONSTRAINT uq_sesion_clase_pasos_orden UNIQUE (sesion_clase_id, orden)
+);
+
+CREATE TABLE IF NOT EXISTS public.sesion_clase_participantes
+(
+    id_sesion_clase_participante integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    sesion_clase_id integer NOT NULL,
+    estudiante_id integer NOT NULL,
+    estado character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'pendiente'::character varying,
+    paso_actual integer NOT NULL DEFAULT 1,
+    iniciada_en timestamp with time zone,
+    finalizada_en timestamp with time zone,
+    CONSTRAINT sesion_clase_participantes_pkey PRIMARY KEY (id_sesion_clase_participante),
+    CONSTRAINT ck_sesion_clase_participantes_estado CHECK (
+        estado::text = ANY (ARRAY['pendiente'::character varying, 'en_progreso'::character varying, 'completado'::character varying, 'abandonado'::character varying, 'cerrado'::character varying]::text[])
+    ),
+    CONSTRAINT ck_sesion_clase_participantes_paso CHECK (paso_actual > 0),
+    CONSTRAINT uq_sesion_clase_participante UNIQUE (sesion_clase_id, estudiante_id)
+);
+
 CREATE TABLE IF NOT EXISTS public.sesiones_juego
 (
     id_sesion_juego integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
@@ -236,10 +285,17 @@ CREATE TABLE IF NOT EXISTS public.sesiones_juego
     errores integer NOT NULL DEFAULT 0,
     combo_maximo integer NOT NULL DEFAULT 0,
     estado_id integer NOT NULL DEFAULT 1,
+    sesion_clase_id integer,
+    orden_en_ruta integer NOT NULL DEFAULT 1,
+    configuracion_aplicada jsonb NOT NULL DEFAULT '{}'::jsonb,
+    fuente_adaptacion character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'base'::character varying,
+    modelo_ia_id integer,
     iniciada_en timestamp with time zone NOT NULL DEFAULT now(),
     finalizada_en timestamp with time zone,
     creado_en timestamp with time zone NOT NULL DEFAULT now(),
-    CONSTRAINT sesiones_juego_pkey PRIMARY KEY (id_sesion_juego)
+    CONSTRAINT sesiones_juego_pkey PRIMARY KEY (id_sesion_juego),
+    CONSTRAINT ck_sesiones_juego_orden_en_ruta CHECK (orden_en_ruta > 0),
+    CONSTRAINT ck_sesiones_juego_fuente_adaptacion CHECK (fuente_adaptacion::text = ANY (ARRAY['base'::character varying, 'reglas'::character varying, 'ia'::character varying]::text[]))
 );
 
 CREATE TABLE IF NOT EXISTS public.tipos_evento
@@ -427,11 +483,6 @@ ALTER TABLE IF EXISTS public.grupos
     ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_grupos_tutor_asignado
     ON public.grupos(tutor_asignado_id);
-ALTER TABLE IF EXISTS public.grupos
-    ADD CONSTRAINT grupos_sesion_minijuego_id_fkey FOREIGN KEY (sesion_minijuego_id)
-    REFERENCES public.minijuegos (id_minijuego) MATCH SIMPLE
-    ON UPDATE NO ACTION
-    ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_grupos_activo
     ON public.grupos(activo);
 
@@ -505,6 +556,65 @@ ALTER TABLE IF EXISTS public.recomendaciones
 CREATE INDEX IF NOT EXISTS idx_rec_severidad
     ON public.recomendaciones(severidad_id);
 
+ALTER TABLE IF EXISTS public.sesiones_clase
+    ADD CONSTRAINT sesiones_clase_abierta_por_usuario_id_fkey FOREIGN KEY (abierta_por_usuario_id)
+    REFERENCES public.usuarios (id_usuario) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE NO ACTION;
+CREATE INDEX IF NOT EXISTS idx_sesiones_clase_abierta_por
+    ON public.sesiones_clase(abierta_por_usuario_id);
+
+ALTER TABLE IF EXISTS public.sesiones_clase
+    ADD CONSTRAINT sesiones_clase_grupo_id_fkey FOREIGN KEY (grupo_id)
+    REFERENCES public.grupos (id_grupo) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_sesiones_clase_grupo
+    ON public.sesiones_clase(grupo_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_grupo_una_sesion_clase_activa
+    ON public.sesiones_clase(grupo_id)
+    WHERE estado::text = 'activa'::text;
+
+ALTER TABLE IF EXISTS public.sesiones_clase
+    ADD CONSTRAINT sesiones_clase_tutor_responsable_id_fkey FOREIGN KEY (tutor_responsable_id)
+    REFERENCES public.usuarios (id_usuario) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE NO ACTION;
+CREATE INDEX IF NOT EXISTS idx_sesiones_clase_tutor
+    ON public.sesiones_clase(tutor_responsable_id);
+
+ALTER TABLE IF EXISTS public.sesion_clase_pasos
+    ADD CONSTRAINT sesion_clase_pasos_minijuego_id_fkey FOREIGN KEY (minijuego_id)
+    REFERENCES public.minijuegos (id_minijuego) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE NO ACTION;
+CREATE INDEX IF NOT EXISTS idx_sesion_clase_pasos_minijuego
+    ON public.sesion_clase_pasos(minijuego_id);
+
+ALTER TABLE IF EXISTS public.sesion_clase_pasos
+    ADD CONSTRAINT sesion_clase_pasos_sesion_clase_id_fkey FOREIGN KEY (sesion_clase_id)
+    REFERENCES public.sesiones_clase (id_sesion_clase) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_sesion_clase_pasos_sesion
+    ON public.sesion_clase_pasos(sesion_clase_id);
+
+ALTER TABLE IF EXISTS public.sesion_clase_participantes
+    ADD CONSTRAINT sesion_clase_participantes_estudiante_id_fkey FOREIGN KEY (estudiante_id)
+    REFERENCES public.estudiantes (id_estudiante) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_sesion_clase_participantes_estudiante
+    ON public.sesion_clase_participantes(estudiante_id);
+
+ALTER TABLE IF EXISTS public.sesion_clase_participantes
+    ADD CONSTRAINT sesion_clase_participantes_sesion_clase_id_fkey FOREIGN KEY (sesion_clase_id)
+    REFERENCES public.sesiones_clase (id_sesion_clase) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_sesion_clase_participantes_sesion
+    ON public.sesion_clase_participantes(sesion_clase_id);
+
 
 ALTER TABLE IF EXISTS public.sesiones_juego
     ADD CONSTRAINT sesiones_juego_estado_id_fkey FOREIGN KEY (estado_id)
@@ -531,6 +641,32 @@ ALTER TABLE IF EXISTS public.sesiones_juego
     ON DELETE NO ACTION;
 CREATE INDEX IF NOT EXISTS idx_sesiones_minijuego
     ON public.sesiones_juego(minijuego_id);
+
+ALTER TABLE IF EXISTS public.sesiones_juego
+    ADD CONSTRAINT sesiones_juego_modelo_ia_id_fkey FOREIGN KEY (modelo_ia_id)
+    REFERENCES public.modelos_ia (id_modelo_ia) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_sesiones_modelo_ia
+    ON public.sesiones_juego(modelo_ia_id);
+
+ALTER TABLE IF EXISTS public.sesiones_juego
+    ADD CONSTRAINT sesiones_juego_sesion_clase_id_fkey FOREIGN KEY (sesion_clase_id)
+    REFERENCES public.sesiones_clase (id_sesion_clase) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE NO ACTION;
+CREATE INDEX IF NOT EXISTS idx_sesiones_juego_sesion_clase
+    ON public.sesiones_juego(sesion_clase_id);
+
+ALTER TABLE IF EXISTS public.sesiones_juego
+    ADD CONSTRAINT sesiones_juego_participante_fkey FOREIGN KEY (sesion_clase_id, estudiante_id)
+    REFERENCES public.sesion_clase_participantes (sesion_clase_id, estudiante_id)
+    DEFERRABLE INITIALLY DEFERRED;
+
+ALTER TABLE IF EXISTS public.sesiones_juego
+    ADD CONSTRAINT sesiones_juego_paso_fkey FOREIGN KEY (sesion_clase_id, orden_en_ruta)
+    REFERENCES public.sesion_clase_pasos (sesion_clase_id, orden)
+    DEFERRABLE INITIALLY DEFERRED;
 
 
 ALTER TABLE IF EXISTS public.usuarios

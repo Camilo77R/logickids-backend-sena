@@ -6,34 +6,37 @@ import {
   applyStudentOwnershipScope,
   assertGroupBelongsToUser,
   assertStudentBelongsToUser,
-  getActiveStudentIdsByGroup,
   withActiveGroupHistory,
 } from './access.service.js';
+import {
+  cerrarSesionClaseSiTermino,
+  ESTADOS_PARTICIPANTE_SESION,
+  obtenerResumenSesionActivaParaEstudiante,
+} from './sesionesClase.service.js';
+import { finalizar } from './sesiones.service.js';
 import { randomCode } from '../utils/codes.js';
+
+const SESION_ACTIVA_STUDENT_RAW = db.raw(`
+  EXISTS (
+    SELECT 1
+    FROM sesion_clase_participantes participante
+    JOIN sesiones_clase sc ON sc.id_sesion_clase = participante.sesion_clase_id
+    WHERE participante.estudiante_id = estudiantes.id_estudiante
+      AND sc.estado = 'activa'
+      AND participante.estado IN ('pendiente', 'en_progreso')
+  ) as sesion_activa
+`);
 
 /** Campos base que se devuelven en la mayoría de respuestas de estudiante */
 const STUDENT_FIELDS = [
-  'estudiantes.id_estudiante as id', 'estudiantes.nombre', 'estudiantes.edad',
-  'estudiantes.color_avatar', 'estudiantes.sesion_activa',
-  'estudiantes.creado_en', 'estados_estudiante.nombre as estado',
+  'estudiantes.id_estudiante as id',
+  'estudiantes.nombre',
+  'estudiantes.edad',
+  'estudiantes.color_avatar',
+  SESION_ACTIVA_STUDENT_RAW,
+  'estudiantes.creado_en',
+  'estados_estudiante.nombre as estado',
   'egh.grupo_id',
-];
-
-/**
- * Campos extendidos para la experiencia móvil del estudiante.
- *
- * POR QUÉ:
- * - el dashboard necesita saber si el estudiante tiene grupo visible
- * - cuando hay grupo activo, también necesita saber si ese grupo sigue vigente
- * - así el front presenta el estado, pero no inventa reglas
- */
-const STUDENT_MOBILE_PROFILE_FIELDS = [
-  ...STUDENT_FIELDS,
-  'grupos.nombre as grupo_nombre',
-  'grupos.activo as grupo_activo',
-  'grupos.sesion_minijuego_id',
-  'minijuegos.slug as sesion_minijuego_slug',
-  'minijuegos.titulo as sesion_minijuego_titulo',
 ];
 
 /**
@@ -42,9 +45,127 @@ const STUDENT_MOBILE_PROFILE_FIELDS = [
  */
 const baseQuery = () =>
   withActiveGroupHistory(
-    db('estudiantes')
-      .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
+    db('estudiantes').join(
+      'estados_estudiante',
+      'estados_estudiante.id_estado_estudiante',
+      'estudiantes.estado_id'
+    )
   );
+
+const buildBaseStudentRow = (executor = db) =>
+  withActiveGroupHistory(
+    executor('estudiantes').join(
+      'estados_estudiante',
+      'estados_estudiante.id_estado_estudiante',
+      'estudiantes.estado_id'
+    )
+  )
+    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
+    .select([
+      ...STUDENT_FIELDS,
+      'grupos.nombre as grupo_nombre',
+      'grupos.activo as grupo_activo',
+    ]);
+
+const enrichStudentWithActiveSession = async (student, executor = db) => {
+  if (!student) {
+    return null;
+  }
+
+  if (!student.grupo_id || student.grupo_activo === false) {
+    return {
+      ...student,
+      sesion_activa: false,
+      sesion_clase_id: null,
+      sesion_modo: null,
+      sesion_total_pasos: 0,
+      sesion_paso_actual: null,
+      sesion_participante_estado: null,
+      sesion_minijuego_id: null,
+      sesion_minijuego_slug: null,
+      sesion_minijuego_titulo: null,
+      sesion_configuracion_base: null,
+    };
+  }
+
+  const resumenSesion = await obtenerResumenSesionActivaParaEstudiante(
+    {
+      grupoId: student.grupo_id,
+      estudianteId: student.id,
+    },
+    executor
+  );
+
+  return {
+    ...student,
+    sesion_activa: Boolean(resumenSesion),
+    sesion_clase_id: resumenSesion?.sesion_clase_id ?? null,
+    sesion_modo: resumenSesion?.sesion_modo ?? null,
+    sesion_total_pasos: Number(resumenSesion?.sesion_total_pasos ?? 0),
+    sesion_paso_actual: resumenSesion?.sesion_paso_actual ?? null,
+    sesion_participante_estado: resumenSesion?.sesion_participante_estado ?? null,
+    sesion_minijuego_id: resumenSesion?.sesion_minijuego_id ?? null,
+    sesion_minijuego_slug: resumenSesion?.sesion_minijuego_slug ?? null,
+    sesion_minijuego_titulo: resumenSesion?.sesion_minijuego_titulo ?? null,
+    sesion_configuracion_base: resumenSesion?.sesion_configuracion_base ?? null,
+  };
+};
+
+const closeClassStateForStudent = async (id_estudiante, executor = db) => {
+  const activoId = await executor('estados_sesion')
+    .where({ nombre: 'activo' })
+    .select('id_estado_sesion')
+    .first();
+
+  const sesionesActivas = await executor('sesiones_juego')
+    .where({ estudiante_id: id_estudiante, estado_id: activoId.id_estado_sesion })
+    .select('id_sesion_juego as id', 'sesion_clase_id');
+
+  const sesionesClaseTocadas = new Set();
+
+  for (const sesion of sesionesActivas) {
+    const resultado = await finalizar(
+      sesion.id,
+      id_estudiante,
+      { estado: 'abandonado' },
+      executor
+    );
+    if (resultado.sesion_clase_id != null) {
+      sesionesClaseTocadas.add(resultado.sesion_clase_id);
+    }
+  }
+
+  const participacionesPendientes = await executor('sesion_clase_participantes as participante')
+    .join('sesiones_clase as sc', 'sc.id_sesion_clase', 'participante.sesion_clase_id')
+    .where('participante.estudiante_id', id_estudiante)
+    .where('sc.estado', 'activa')
+    .whereIn('participante.estado', [
+      ESTADOS_PARTICIPANTE_SESION.pendiente,
+      ESTADOS_PARTICIPANTE_SESION.enProgreso,
+    ])
+    .select('participante.sesion_clase_id');
+
+  if (participacionesPendientes.length) {
+    await executor('sesion_clase_participantes')
+      .whereIn(
+        'sesion_clase_id',
+        participacionesPendientes.map((participacion) => participacion.sesion_clase_id)
+      )
+      .andWhere({ estudiante_id: id_estudiante })
+      .update({
+        estado: ESTADOS_PARTICIPANTE_SESION.cerrado,
+        finalizada_en: executor.fn.now(),
+      });
+
+    participacionesPendientes.forEach((participacion) =>
+      sesionesClaseTocadas.add(participacion.sesion_clase_id)
+    );
+  }
+
+  for (const sesionClaseId of sesionesClaseTocadas) {
+    await cerrarSesionClaseSiTermino(sesionClaseId, executor);
+  }
+};
 
 /**
  * Genera un QR token único con reintentos.
@@ -63,23 +184,12 @@ const generateUniqueQR = async () => {
 /**
  * Autentica a un estudiante mediante su QR token.
  * Emite un JWT firmado con JWT_STUDENT_SECRET (diferente al de tutores).
- *
- * @param {string} qr_token - Token QR escaneado desde la app móvil
- * @returns {{ token: string, estudiante: object }}
- * @throws {AppError} 404 si el QR no corresponde a ningún estudiante
- * @throws {AppError} 403 si el estudiante está inactivo
  */
 export const loginEstudiante = async (qr_token) => {
-  const est = await baseQuery()
-    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
-    .leftJoin('minijuegos', 'minijuegos.id_minijuego', 'grupos.sesion_minijuego_id')
+  const est = await buildBaseStudentRow()
     .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
     .where('estudiantes.qr_token', qr_token)
-    .select([
-      ...STUDENT_MOBILE_PROFILE_FIELDS,
-      'estudiantes.qr_token',
-      'instituciones.activo as institucion_activa',
-    ])
+    .select('estudiantes.qr_token', 'instituciones.activo as institucion_activa')
     .first();
 
   if (!est) throw new AppError('QR inválido', 404);
@@ -88,24 +198,18 @@ export const loginEstudiante = async (qr_token) => {
     throw new AppError('La institución del estudiante está desactivada', 403);
   }
 
+  const perfil = await enrichStudentWithActiveSession(est);
+
   const token = jwt.sign(
-    { id: est.id, nombre: est.nombre, grupo_id: est.grupo_id },
+    { id: perfil.id, nombre: perfil.nombre, grupo_id: perfil.grupo_id },
     env.JWT_STUDENT_SECRET,
     { expiresIn: env.JWT_STUDENT_EXPIRES_IN }
   );
 
-  // No devolver el qr_token en la respuesta por seguridad
-  const { qr_token: _, ...estudiante } = est;
+  const { qr_token: _, ...estudiante } = perfil;
   return { token, estudiante };
 };
 
-/**
- * Lista estudiantes activos del tutor, opcionalmente filtrados por grupo.
- * El admin ve todos los estudiantes de su institución.
- *
- * @param {object} user - Usuario autenticado (tutor o admin)
- * @param {number|null} grupo_id - Filtro opcional por grupo
- */
 export const listar = async (user, grupo_id) => {
   let query = baseQuery()
     .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
@@ -119,17 +223,13 @@ export const listar = async (user, grupo_id) => {
   return query;
 };
 
-/**
- * Lista todos los estudiantes incluyendo inactivos.
- * Útil para el panel de administración del tutor.
- *
- * @param {object} user - Usuario autenticado
- * @param {number|null} grupo_id - Filtro opcional
- */
 export const listarTodos = async (user, grupo_id) => {
   let query = withActiveGroupHistory(
-    db('estudiantes')
-      .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
+    db('estudiantes').join(
+      'estados_estudiante',
+      'estados_estudiante.id_estado_estudiante',
+      'estudiantes.estado_id'
+    )
   )
     .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
     .select([...STUDENT_FIELDS, 'estados_estudiante.nombre as estado', 'grupos.activo as grupo_activo'])
@@ -141,13 +241,6 @@ export const listarTodos = async (user, grupo_id) => {
   return query;
 };
 
-/**
- * Devuelve el detalle de un estudiante verificando permisos del tutor.
- *
- * @param {number} id_estudiante
- * @param {object} user
- * @throws {AppError} 403 si el estudiante no pertenece a los grupos del tutor
- */
 export const obtener = async (id_estudiante, user) => {
   await assertStudentBelongsToUser(id_estudiante, user);
   return baseQuery()
@@ -156,28 +249,14 @@ export const obtener = async (id_estudiante, user) => {
     .first();
 };
 
-/**
- * Perfil del estudiante autenticado para el dashboard de la app móvil.
- * No requiere validación de ownership porque el JWT garantiza la identidad.
- *
- * @param {number} id_estudiante - Extraído del JWT del estudiante
- */
-export const obtenerPerfilInfantil = (id_estudiante) =>
-  baseQuery()
-    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
-    .leftJoin('minijuegos', 'minijuegos.id_minijuego', 'grupos.sesion_minijuego_id')
+export const obtenerPerfilInfantil = async (id_estudiante) => {
+  const student = await buildBaseStudentRow()
     .where('estudiantes.id_estudiante', id_estudiante)
-    .select(STUDENT_MOBILE_PROFILE_FIELDS)
     .first();
 
-/**
- * Crea un estudiante y lo registra en el historial del grupo.
- * Genera automáticamente un QR token único.
- *
- * @param {object} user - Admin institucional que crea al estudiante
- * @param {{ grupo_id, nombre, edad, color_avatar }} datos
- * @throws {AppError} 403 si el grupo no pertenece a la institución del admin
- */
+  return enrichStudentWithActiveSession(student);
+};
+
 export const crear = async (user, { grupo_id, nombre, edad, color_avatar }) => {
   if (grupo_id) {
     const group = await assertGroupBelongsToUser(grupo_id, user);
@@ -190,16 +269,15 @@ export const crear = async (user, { grupo_id, nombre, edad, color_avatar }) => {
 
   const [est] = await db('estudiantes')
     .insert({
-      nombre, edad,
+      nombre,
+      edad,
       color_avatar: color_avatar ?? '#3B82F6',
       qr_token,
-      sesion_activa: false,
       estado_id: 1,
       institucion_id: user.institucion_id ?? null,
     })
     .returning('*');
 
-  // Registra la asignación inicial en el historial de grupos
   if (grupo_id) {
     await db('estudiante_grupo_historial').insert({
       estudiante_id: est.id_estudiante,
@@ -212,14 +290,6 @@ export const crear = async (user, { grupo_id, nombre, edad, color_avatar }) => {
   return obtener(est.id_estudiante, user);
 };
 
-/**
- * Actualiza datos básicos del estudiante (nombre, edad, avatar).
- * El tutor no puede cambiar el QR ni el grupo desde aquí.
- *
- * @param {number} id_estudiante
- * @param {object} user
- * @param {object} datos - Campos permitidos: nombre, edad, color_avatar
- */
 export const actualizar = async (id_estudiante, user, datos) => {
   await assertStudentBelongsToUser(id_estudiante, user);
   const allowed = ['nombre', 'edad', 'color_avatar'];
@@ -229,25 +299,15 @@ export const actualizar = async (id_estudiante, user, datos) => {
   return baseQuery().where('estudiantes.id_estudiante', id_estudiante).select(STUDENT_FIELDS).first();
 };
 
-/**
- * Desactiva un estudiante: no puede iniciar sesión ni aparecer en listados activos.
- * También cierra su sesión de juego si estaba abierta.
- *
- * @param {number} id_estudiante
- * @param {object} user
- */
 export const desactivar = async (id_estudiante, user) => {
   await assertStudentBelongsToUser(id_estudiante, user);
-  
+
   const { id_estado_estudiante: idInactivo } = await db('estados_estudiante')
     .where({ nombre: 'inactivo' })
     .select('id_estado_estudiante')
     .first();
 
-  const estudiante = await db('estudiantes')
-    .where({ id_estudiante })
-    .select('estado_id')
-    .first();
+  const estudiante = await db('estudiantes').where({ id_estudiante }).select('estado_id').first();
 
   if (!estudiante) {
     throw new AppError('Estudiante no encontrado', 404);
@@ -257,29 +317,24 @@ export const desactivar = async (id_estudiante, user) => {
     throw new AppError('El estudiante ya está inactivo', 409);
   }
 
-  await db('estudiantes')
-    .where({ id_estudiante })
-    .update({ estado_id: idInactivo, sesion_activa: false, actualizado_en: db.fn.now() });
+  await db.transaction(async (trx) => {
+    await closeClassStateForStudent(id_estudiante, trx);
+
+    await trx('estudiantes')
+      .where({ id_estudiante })
+      .update({ estado_id: idInactivo, actualizado_en: trx.fn.now() });
+  });
 };
 
-/**
- * Reactiva un estudiante inactivo para que vuelva a poder acceder.
- *
- * @param {number} id_estudiante
- * @param {object} user
- */
 export const reactivar = async (id_estudiante, user) => {
   await assertStudentBelongsToUser(id_estudiante, user);
-  
+
   const { id_estado_estudiante: idActivo } = await db('estados_estudiante')
     .where({ nombre: 'activo' })
     .select('id_estado_estudiante')
     .first();
 
-  const estudiante = await db('estudiantes')
-    .where({ id_estudiante })
-    .select('estado_id')
-    .first();
+  const estudiante = await db('estudiantes').where({ id_estudiante }).select('estado_id').first();
 
   if (!estudiante) {
     throw new AppError('Estudiante no encontrado', 404);
@@ -294,14 +349,6 @@ export const reactivar = async (id_estudiante, user) => {
     .update({ estado_id: idActivo, actualizado_en: db.fn.now() });
 };
 
-/**
- * Devuelve el QR token del estudiante para que el tutor lo imprima o muestre.
- * El QR no cambia a menos que se regenere explícitamente.
- *
- * @param {number} id_estudiante
- * @param {object} user
- * @returns {{ qr_token: string }}
- */
 export const obtenerQR = async (id_estudiante, user) => {
   await assertStudentBelongsToUser(id_estudiante, user);
   const est = await db('estudiantes').where({ id_estudiante }).select('qr_token').first();
@@ -309,30 +356,6 @@ export const obtenerQR = async (id_estudiante, user) => {
   return { qr_token: est.qr_token };
 };
 
-/**
- * Activa o desactiva la sesión de juego de un estudiante individual.
- * El método masivo (por grupo) se maneja en grupos.service.js.
- *
- * @param {number} id_estudiante
- * @param {object} user
- * @param {boolean} sesion_activa
- */
-export const toggleSesion = async (id_estudiante, user, sesion_activa) => {
-  await assertStudentBelongsToUser(id_estudiante, user);
-  await db('estudiantes').where({ id_estudiante }).update({ sesion_activa, actualizado_en: db.fn.now() });
-};
-
-/**
- * Traslada al estudiante a otro grupo del mismo tutor.
- * Cierra el historial anterior con fecha_fin y abre uno nuevo.
- * El estudiante solo puede pertenecer a un grupo activo a la vez.
- *
- * @param {number} id_estudiante
- * @param {object} user
- * @param {number} nuevo_grupo_id
- * @throws {AppError} 409 si el estudiante ya pertenece al grupo destino
- * @throws {AppError} 403 si el grupo destino no pertenece al tutor
- */
 export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
   const student = await assertStudentBelongsToUser(id_estudiante, user);
   const newGroup = await assertGroupBelongsToUser(nuevo_grupo_id, user);
@@ -346,12 +369,12 @@ export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
   }
 
   await db.transaction(async (trx) => {
-    // Cierra todos los registros activos anteriores con fecha de salida
+    await closeClassStateForStudent(id_estudiante, trx);
+
     await trx('estudiante_grupo_historial')
       .where({ estudiante_id: id_estudiante, activo: true })
       .update({ activo: false, fecha_fin: trx.fn.now() });
 
-    // Inserta el nuevo registro en el historial
     await trx('estudiante_grupo_historial')
       .insert({
         estudiante_id: id_estudiante,
@@ -361,18 +384,11 @@ export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
       })
       .onConflict(['estudiante_id', 'grupo_id', 'fecha_inicio'])
       .merge({ activo: true, fecha_fin: null });
-
-    await trx('estudiantes')
-      .where({ id_estudiante })
-      .update({
-        sesion_activa: false,
-        actualizado_en: trx.fn.now(),
-      });
   });
 
   return db('estudiantes')
     .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
-    .leftJoin('estudiante_grupo_historial', function () {
+    .leftJoin('estudiante_grupo_historial', function joinActiveMembership() {
       this.on('estudiante_grupo_historial.estudiante_id', 'estudiantes.id_estudiante')
         .andOn('estudiante_grupo_historial.activo', db.raw('TRUE'))
         .andOnNull('estudiante_grupo_historial.fecha_fin');
@@ -384,7 +400,7 @@ export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
       'estudiantes.nombre',
       'estudiantes.edad',
       'estudiantes.color_avatar',
-      'estudiantes.sesion_activa',
+      SESION_ACTIVA_STUDENT_RAW,
       'estudiantes.creado_en',
       'estados_estudiante.nombre as estado',
       'estudiante_grupo_historial.grupo_id'

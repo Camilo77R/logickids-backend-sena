@@ -4,14 +4,23 @@ import {
   applyGroupAccessScope,
   assertGroupAssignedToTutor,
   assertGroupBelongsToUser,
+  getActiveStudentIdsByGroup,
 } from './access.service.js';
+import {
+  crearSesionClase,
+  cerrarSesionClasePorGrupo,
+  ESTADOS_SESION_CLASE,
+  obtenerSesionClaseActivaPorGrupo,
+  obtenerResumenSesionActivaParaGrupo,
+  resolvePlanSesionClase,
+} from './sesionesClase.service.js';
+import { abandonarSesionesActivasDeClase } from './sesiones.service.js';
 
 const GROUP_FIELDS = [
   'grupos.id_grupo as id',
   'grupos.creado_por_usuario_id',
   'grupos.tutor_asignado_id',
   'grupos.institucion_id',
-  'grupos.sesion_minijuego_id',
   'grupos.nombre',
   'grupos.descripcion',
   'grupos.predeterminado',
@@ -21,49 +30,80 @@ const GROUP_FIELDS = [
   'grupos.actualizado_en',
   'tutor.nombre as tutor_nombre',
   'tutor.email as tutor_email',
-  'minijuegos.slug as sesion_minijuego_slug',
-  'minijuegos.titulo as sesion_minijuego_titulo',
+  db.raw(`
+    EXISTS (
+      SELECT 1
+      FROM sesiones_clase sc
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+    ) as sesion_activa
+  `),
+  db.raw(`
+    (
+      SELECT sc.id_sesion_clase
+      FROM sesiones_clase sc
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+      LIMIT 1
+    ) as sesion_clase_id
+  `),
+  db.raw(`
+    (
+      SELECT sc.modo
+      FROM sesiones_clase sc
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+      LIMIT 1
+    ) as sesion_modo
+  `),
+  db.raw(`
+    (
+      SELECT COUNT(*)
+      FROM sesiones_clase sc
+      JOIN sesion_clase_pasos pasos ON pasos.sesion_clase_id = sc.id_sesion_clase
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+    ) as sesion_total_pasos
+  `),
+  db.raw(`
+    (
+      SELECT paso.minijuego_id
+      FROM sesiones_clase sc
+      JOIN sesion_clase_pasos paso ON paso.sesion_clase_id = sc.id_sesion_clase
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+        AND paso.orden = 1
+      LIMIT 1
+    ) as sesion_minijuego_id
+  `),
+  db.raw(`
+    (
+      SELECT m.slug
+      FROM sesiones_clase sc
+      JOIN sesion_clase_pasos paso ON paso.sesion_clase_id = sc.id_sesion_clase
+      JOIN minijuegos m ON m.id_minijuego = paso.minijuego_id
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+        AND paso.orden = 1
+      LIMIT 1
+    ) as sesion_minijuego_slug
+  `),
+  db.raw(`
+    (
+      SELECT m.titulo
+      FROM sesiones_clase sc
+      JOIN sesion_clase_pasos paso ON paso.sesion_clase_id = sc.id_sesion_clase
+      JOIN minijuegos m ON m.id_minijuego = paso.minijuego_id
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+        AND paso.orden = 1
+      LIMIT 1
+    ) as sesion_minijuego_titulo
+  `),
 ];
 
 const buildGroupQuery = () =>
-  db('grupos')
-    .leftJoin('usuarios as tutor', 'tutor.id_usuario', 'grupos.tutor_asignado_id')
-    .leftJoin('minijuegos', 'minijuegos.id_minijuego', 'grupos.sesion_minijuego_id');
-
-const addSessionActiveProjection = (query) =>
-  query.select(
-    db.raw(`
-      EXISTS (
-        SELECT 1
-        FROM estudiante_grupo_historial egh
-        JOIN estudiantes e ON e.id_estudiante = egh.estudiante_id
-        WHERE egh.grupo_id = grupos.id_grupo
-          AND egh.activo = true
-          AND egh.fecha_fin IS NULL
-          AND e.sesion_activa = true
-      ) as sesion_activa
-    `)
-  );
-
-const closeStudentSessionsForGroup = async (trx, grupo_id) => {
-  const rows = await trx('estudiante_grupo_historial')
-    .where({ grupo_id, activo: true })
-    .whereNull('fecha_fin')
-    .select('estudiante_id');
-
-  const studentIds = rows.map(({ estudiante_id }) => estudiante_id);
-
-  if (studentIds.length) {
-    await trx('estudiantes')
-      .whereIn('id_estudiante', studentIds)
-      .update({
-        sesion_activa: false,
-        actualizado_en: trx.fn.now(),
-      });
-  }
-
-  return studentIds.length;
-};
+  db('grupos').leftJoin('usuarios as tutor', 'tutor.id_usuario', 'grupos.tutor_asignado_id');
 
 const resolveTutorAsignable = async (tutorId, actor, trx = db) => {
   const tutor = await trx('usuarios as u')
@@ -97,30 +137,32 @@ const resolveTutorAsignable = async (tutorId, actor, trx = db) => {
   return tutor;
 };
 
-const resolveOpenMinigame = async (minijuegoId, trx = db) => {
-  const minijuego = await trx('minijuegos')
-    .where({ id_minijuego: minijuegoId, activo: true })
-    .select('id_minijuego as id', 'slug', 'titulo')
-    .first();
-
-  if (!minijuego) {
-    throw new AppError('El minijuego seleccionado no está disponible', 404);
-  }
-
-  return minijuego;
-};
-
 const fetchGroupById = async (id_grupo, user) => {
   const query = buildGroupQuery().where('grupos.id_grupo', id_grupo).select(GROUP_FIELDS);
   applyGroupAccessScope(query, user);
-  addSessionActiveProjection(query);
   return query.first();
+};
+
+const closeActiveClassForGroup = async (grupoId, { cierreMotivo, estado }, trx) => {
+  const sesionActiva = await obtenerSesionClaseActivaPorGrupo(grupoId, trx);
+  if (!sesionActiva) {
+    return null;
+  }
+
+  await abandonarSesionesActivasDeClase(sesionActiva.id, { estadoSesionJuego: 'abandonado' }, trx);
+  return cerrarSesionClasePorGrupo(
+    {
+      grupoId,
+      estado,
+      cierreMotivo,
+    },
+    trx
+  );
 };
 
 export const listar = async (user) => {
   const query = buildGroupQuery().select(GROUP_FIELDS);
   applyGroupAccessScope(query, user);
-  addSessionActiveProjection(query);
 
   return query
     .orderBy('grupos.predeterminado', 'desc')
@@ -137,6 +179,7 @@ export const obtener = async (id_grupo, user) => {
     .join('estudiante_grupo_historial as egh', function joinCurrentMembership() {
       this.on('egh.estudiante_id', 'estudiantes.id_estudiante')
         .andOn('egh.activo', db.raw('TRUE'))
+        .andOnNull('egh.fecha_fin')
         .andOn('egh.grupo_id', db.raw('?', [id_grupo]));
     })
     .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
@@ -146,7 +189,18 @@ export const obtener = async (id_grupo, user) => {
       'estudiantes.nombre',
       'estudiantes.edad',
       'estudiantes.color_avatar',
-      'estudiantes.sesion_activa'
+      db.raw(`
+        EXISTS (
+          SELECT 1
+          FROM sesiones_clase sc
+          JOIN sesion_clase_participantes participante
+            ON participante.sesion_clase_id = sc.id_sesion_clase
+          WHERE sc.grupo_id = ?
+            AND sc.estado = 'activa'
+            AND participante.estudiante_id = estudiantes.id_estudiante
+            AND participante.estado IN ('pendiente', 'en_progreso')
+        ) as sesion_activa
+      `, [id_grupo])
     )
     .orderBy('estudiantes.nombre', 'asc');
 
@@ -196,14 +250,16 @@ export const asignarTutor = async (id_grupo, actor, tutor_id) => {
     await resolveTutorAsignable(tutor_id, actor);
   }
 
-  return db.transaction(async (trx) => {
-    await closeStudentSessionsForGroup(trx, id_grupo);
+  await db.transaction(async (trx) => {
+    await closeActiveClassForGroup(id_grupo, {
+      cierreMotivo: 'reasignacion_tutor',
+      estado: ESTADOS_SESION_CLASE.cancelada,
+    }, trx);
 
     await trx('grupos')
       .where({ id_grupo })
       .update({
         tutor_asignado_id: tutor_id ?? null,
-        sesion_minijuego_id: null,
         actualizado_en: trx.fn.now(),
       });
 
@@ -239,7 +295,12 @@ export const archivar = async (id_grupo, user) => {
   }
 
   return db.transaction(async (trx) => {
-    const affectedStudents = await closeStudentSessionsForGroup(trx, id_grupo);
+    const affectedStudents = await getActiveStudentIdsByGroup(id_grupo, user, trx);
+
+    await closeActiveClassForGroup(id_grupo, {
+      cierreMotivo: 'grupo_archivado',
+      estado: ESTADOS_SESION_CLASE.cancelada,
+    }, trx);
 
     await trx('estudiante_grupo_historial')
       .where({ grupo_id: id_grupo, activo: true })
@@ -254,13 +315,12 @@ export const archivar = async (id_grupo, user) => {
       .update({
         activo: false,
         archivado_en: trx.fn.now(),
-        sesion_minijuego_id: null,
         actualizado_en: trx.fn.now(),
       });
 
     return {
-      estudiantes_desvinculados: affectedStudents,
-      sesiones_cerradas: affectedStudents,
+      estudiantes_desvinculados: affectedStudents.length,
+      sesiones_cerradas: affectedStudents.length,
     };
   }).then(async (summary) => ({
     ...(await obtener(id_grupo, user)),
@@ -286,60 +346,76 @@ export const restaurar = async (id_grupo, user) => {
   return obtener(id_grupo, user);
 };
 
-export const toggleSesion = async (id_grupo, user, { sesion_activa, minijuego_id }) => {
+export const toggleSesion = async (id_grupo, user, { sesion_activa, minijuego_id, pasos, modo }) => {
   const group = await assertGroupAssignedToTutor(id_grupo, user);
 
   if (group.activo === false) {
     throw new AppError('No se puede abrir ni cerrar la clase de un grupo archivado', 409);
   }
 
-  const selectedMinigame = sesion_activa
-    ? await resolveOpenMinigame(minijuego_id ?? group.sesion_minijuego_id)
-    : null;
+  if (!sesion_activa) {
+    const sesionActiva = await obtenerSesionClaseActivaPorGrupo(id_grupo);
+    if (!sesionActiva) {
+      return { actualizados: 0, sesion_activa: false, minijuego_id: null };
+    }
 
-  const rows = await db('estudiante_grupo_historial')
-    .where({ grupo_id: id_grupo, activo: true })
-    .whereNull('fecha_fin')
-    .select('estudiante_id');
+    const [{ total }] = await db('sesion_clase_participantes')
+      .where({ sesion_clase_id: sesionActiva.id })
+      .count('id_sesion_clase_participante as total');
 
-  const studentIds = rows.map(({ estudiante_id }) => estudiante_id);
+    await db.transaction(async (trx) => {
+      await closeActiveClassForGroup(id_grupo, {
+        cierreMotivo: 'manual',
+        estado: ESTADOS_SESION_CLASE.cerrada,
+      }, trx);
+    });
 
-  if (!studentIds.length && sesion_activa) {
-    throw new AppError('No hay estudiantes activos en este grupo. Agrega estudiantes antes de abrir la clase.', 422);
+    return {
+      actualizados: Number(total ?? 0),
+      sesion_activa: false,
+      minijuego_id: null,
+      minijuego_slug: null,
+      minijuego_titulo: null,
+    };
   }
 
+  const activeSession = await obtenerSesionClaseActivaPorGrupo(id_grupo);
+  if (activeSession) {
+    throw new AppError('El grupo ya tiene una sesión de clase activa', 409);
+  }
+
+  const studentIds = await getActiveStudentIdsByGroup(id_grupo, user);
   if (!studentIds.length) {
-    await db('grupos')
-      .where({ id_grupo })
-      .update({
-        sesion_minijuego_id: null,
-        actualizado_en: db.fn.now(),
-      });
-
-    return { actualizados: 0, sesion_activa, minijuego_id: null };
+    throw new AppError(
+      'No hay estudiantes activos en este grupo. Agrega estudiantes antes de abrir la clase.',
+      422
+    );
   }
+
+  const planSesion = await resolvePlanSesionClase({ minijuego_id, pasos, modo });
 
   await db.transaction(async (trx) => {
-    await trx('estudiantes')
-      .whereIn('id_estudiante', studentIds)
-      .update({
-        sesion_activa,
-        actualizado_en: trx.fn.now(),
-      });
-
-    await trx('grupos')
-      .where({ id_grupo })
-      .update({
-        sesion_minijuego_id: sesion_activa ? selectedMinigame.id : null,
-        actualizado_en: trx.fn.now(),
-      });
+    await crearSesionClase(
+      {
+        grupoId: id_grupo,
+        tutorResponsableId: user.id,
+        abiertaPorUsuarioId: user.id,
+        estudianteIds: studentIds,
+        planSesion,
+      },
+      trx
+    );
   });
 
+  const resumenSesion = await obtenerResumenSesionActivaParaGrupo(id_grupo);
   return {
     actualizados: studentIds.length,
-    sesion_activa,
-    minijuego_id: selectedMinigame?.id ?? null,
-    minijuego_slug: selectedMinigame?.slug ?? null,
-    minijuego_titulo: selectedMinigame?.titulo ?? null,
+    sesion_activa: true,
+    minijuego_id: resumenSesion?.sesion_minijuego_id ?? null,
+    minijuego_slug: resumenSesion?.sesion_minijuego_slug ?? null,
+    minijuego_titulo: resumenSesion?.sesion_minijuego_titulo ?? null,
+    sesion_clase_id: resumenSesion?.sesion_clase_id ?? null,
+    sesion_modo: resumenSesion?.sesion_modo ?? null,
+    sesion_total_pasos: Number(resumenSesion?.sesion_total_pasos ?? 0),
   };
 };

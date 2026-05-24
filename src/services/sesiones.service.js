@@ -4,15 +4,26 @@ import { assertSessionBelongsToUser, assertStudentBelongsToUser } from './access
 import { actualizarStats } from './estadisticas.service.js';
 import { evaluarLogrosSesion } from './logros.service.js';
 import {
+  avanzarParticipacionSesionClase,
+  cerrarSesionClaseSiTermino,
+  ESTADOS_PARTICIPANTE_SESION,
+  esEstadoParticipanteTerminal,
+  marcarParticipanteEnProgreso,
+} from './sesionesClase.service.js';
+import {
   buildCodigoEstelarGameConfig,
   buildRoomKey,
   CODIGO_ESTELAR_SLUG,
   CODIGO_ESTELAR_SOCKET_EVENTS,
 } from '../games/codigoEstelar/codigoEstelar.config.js';
+import {
+  buildCaminoArGameConfig,
+  CAMINO_AR_SLUG,
+} from '../games/caminoAr/caminoAr.config.js';
 
 /** Resuelve el ID de una tabla catálogo por su nombre usando la PK correcta */
-const resolveCatalogId = async (table, pkColumn, nombre) => {
-  const r = await db(table).where({ nombre }).select(pkColumn).first();
+const resolveCatalogId = async (table, pkColumn, nombre, executor = db) => {
+  const r = await executor(table).where({ nombre }).select(pkColumn).first();
   if (!r) throw new AppError(`Valor '${nombre}' no encontrado en ${table}`, 400);
   return r[pkColumn];
 };
@@ -39,16 +50,31 @@ const resolvePlayableStudentContext = async (estudiante_id) =>
         .andOnNull('egh.fecha_fin');
     })
     .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
+    .leftJoin('sesiones_clase as sc', function joinActiveClassSession() {
+      this.on('sc.grupo_id', 'egh.grupo_id').andOn('sc.estado', db.raw('?', ['activa']));
+    })
+    .leftJoin('sesion_clase_participantes as participante', function joinParticipantSnapshot() {
+      this.on('participante.sesion_clase_id', 'sc.id_sesion_clase')
+        .andOn('participante.estudiante_id', 'estudiantes.id_estudiante');
+    })
+    .leftJoin('sesion_clase_pasos as paso', function joinCurrentStep() {
+      this.on('paso.sesion_clase_id', 'sc.id_sesion_clase')
+        .andOn('paso.orden', 'participante.paso_actual');
+    })
     .where('estudiantes.id_estudiante', estudiante_id)
     .select(
       'estudiantes.id_estudiante',
-      'estudiantes.sesion_activa',
       'estudiantes.institucion_id',
       'estados_estudiante.nombre as estado',
       'instituciones.activo as institucion_activa',
       'egh.grupo_id',
       'grupos.activo as grupo_activo',
-      'grupos.sesion_minijuego_id'
+      'sc.id_sesion_clase as sesion_clase_id',
+      'sc.modo as sesion_modo',
+      'participante.estado as sesion_participante_estado',
+      'participante.paso_actual as sesion_paso_actual',
+      'paso.minijuego_id as sesion_minijuego_id',
+      'paso.configuracion_base as sesion_configuracion_base'
     )
     .first();
 
@@ -69,8 +95,16 @@ const assertPlayableStudentContext = (context) => {
     throw new AppError('El estudiante no tiene un grupo activo habilitado para jugar', 403);
   }
 
-  if (!context.sesion_activa) {
+  if (!context.sesion_clase_id) {
     throw new AppError('Sesión no activa. El tutor debe abrir la clase primero.', 403);
+  }
+
+  if (!context.sesion_participante_estado) {
+    throw new AppError('El estudiante no hace parte de la sesión activa de su grupo', 403);
+  }
+
+  if (esEstadoParticipanteTerminal(context.sesion_participante_estado)) {
+    throw new AppError('La actividad actual ya fue completada o cerrada para este estudiante', 409);
   }
 };
 
@@ -129,45 +163,176 @@ const resolveInitialDifficulty = async (estudiante_id, minijuego, requestedDiffi
   return requestedDifficulty;
 };
 
-const buildRealtimeConfig = (grupoId, minijuegoSlug) => ({
-  room_key: buildRoomKey(grupoId, minijuegoSlug),
-  socket_events: SOCKET_EVENTS_BY_SLUG[minijuegoSlug] ?? {},
-});
+const buildRealtimeConfig = (grupoId, minijuegoSlug) => {
+  const socketEvents = SOCKET_EVENTS_BY_SLUG[minijuegoSlug];
 
-const buildGameConfig = (grupoId, minijuego, dificultad) => {
+  if (!socketEvents) {
+    return {
+      room_key: null,
+      socket_events: {},
+    };
+  }
+
+  return {
+    room_key: buildRoomKey(grupoId, minijuegoSlug),
+    socket_events: socketEvents,
+  };
+};
+
+const buildGameConfig = (grupoId, minijuego, dificultad, configuracionBase = {}) => {
+  const configuracionNormalizada =
+    configuracionBase && typeof configuracionBase === 'object' && !Array.isArray(configuracionBase)
+      ? configuracionBase
+      : {};
+
   switch (minijuego.slug) {
     case CODIGO_ESTELAR_SLUG:
-      return buildCodigoEstelarGameConfig(grupoId, dificultad);
+      return {
+        ...configuracionNormalizada,
+        ...buildCodigoEstelarGameConfig(grupoId, dificultad),
+        dificultad,
+      };
+    case CAMINO_AR_SLUG:
+      return buildCaminoArGameConfig(dificultad, configuracionNormalizada);
     default:
-      return { dificultad };
+      return { ...configuracionNormalizada, dificultad };
   }
 };
 
-const buildSessionStartResponse = ({ sesion, grupoId, minijuego, dificultad }) => ({
+const buildSessionStartResponse = ({
+  sesion,
+  grupoId,
+  minijuego,
+  dificultad,
+  sesionClaseId,
+  sesionModo,
+  ordenEnRuta,
+  gameConfig,
+}) => ({
   sesion: {
     id: sesion.id_sesion_juego,
+    sesion_clase_id: sesionClaseId,
     estado: 'activo',
     dificultad,
     minijuego_id: minijuego.id,
     minijuego_slug: minijuego.slug,
+    modo: sesionModo,
+    orden_en_ruta: ordenEnRuta,
   },
   realtime: buildRealtimeConfig(grupoId, minijuego.slug),
-  game_config: buildGameConfig(grupoId, minijuego, dificultad),
+  game_config: gameConfig,
 });
 
-const openStudentGameSession = async ({ estudiante_id, minijuego_id, dificultad }) => {
-  const activo_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'activo');
-  const abandonado_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'abandonado');
+const openStudentGameSession = async ({
+  estudiante_id,
+  minijuego_id,
+  dificultad,
+  sesion_clase_id,
+  orden_en_ruta,
+  configuracion_aplicada,
+  fuente_adaptacion,
+  executor = db,
+}) => {
+  const activo_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'activo', executor);
+  const abandonado_id = await resolveCatalogId(
+    'estados_sesion',
+    'id_estado_sesion',
+    'abandonado',
+    executor
+  );
 
-  await db('sesiones_juego')
+  await executor('sesiones_juego')
     .where({ estudiante_id, estado_id: activo_id })
-    .update({ estado_id: abandonado_id, finalizada_en: db.fn.now() });
+    .update({ estado_id: abandonado_id, finalizada_en: executor.fn.now() });
 
-  const [sesion] = await db('sesiones_juego')
-    .insert({ estudiante_id, minijuego_id, dificultad, estado_id: activo_id })
+  const [sesion] = await executor('sesiones_juego')
+    .insert({
+      estudiante_id,
+      minijuego_id,
+      dificultad,
+      estado_id: activo_id,
+      sesion_clase_id,
+      orden_en_ruta,
+      configuracion_aplicada,
+      fuente_adaptacion,
+    })
     .returning('*');
 
   return sesion;
+};
+
+const finalizarSesionInterna = async (
+  sesion_id,
+  estudiante_id,
+  { estado = 'completado' } = {},
+  executor = db
+) => {
+  const sesionExistente = await resolveSessionForFinalization(sesion_id, estudiante_id, executor);
+  if (!sesionExistente) {
+    throw new AppError('Sesión no encontrada', 404);
+  }
+
+  if (sesionExistente.estado !== 'activo') {
+    const sesionPersistida = await executor('sesiones_juego')
+      .where({ id_sesion_juego: sesion_id })
+      .first();
+    return {
+      ...sesionPersistida,
+      resumen_oficial: buildPersistedOfficialSummary(sesionPersistida),
+      logros_desbloqueados: [],
+      finalizacion_idempotente: true,
+    };
+  }
+
+  const estado_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', estado, executor);
+  const officialSummary = await buildOfficialSessionSummary(sesion_id, executor);
+
+  const updateData = {
+    estado_id,
+    finalizada_en: executor.fn.now(),
+    puntaje: officialSummary.puntaje,
+    aciertos: officialSummary.aciertos,
+    errores: officialSummary.errores,
+    combo_maximo: officialSummary.combo_maximo,
+  };
+
+  await executor('sesiones_juego').where({ id_sesion_juego: sesion_id }).update(updateData);
+  await actualizarStats(estudiante_id, sesion_id, executor);
+
+  const logros_desbloqueados = await evaluarLogrosSesion(
+    estudiante_id,
+    {
+      aciertos: officialSummary.aciertos,
+      errores: officialSummary.errores,
+      combo_maximo: officialSummary.combo_maximo,
+      estado,
+    },
+    executor
+  );
+
+  let progreso_ruta = null;
+  if (sesionExistente.sesion_clase_id != null) {
+    progreso_ruta = await avanzarParticipacionSesionClase(
+      {
+        sesionClaseId: sesionExistente.sesion_clase_id,
+        estudianteId: estudiante_id,
+        ordenActual: sesionExistente.orden_en_ruta,
+        estadoFinal: estado,
+      },
+      executor
+    );
+
+    await cerrarSesionClaseSiTermino(sesionExistente.sesion_clase_id, executor);
+  }
+
+  const sesion = await executor('sesiones_juego').where({ id_sesion_juego: sesion_id }).first();
+  return {
+    ...sesion,
+    resumen_oficial: officialSummary,
+    logros_desbloqueados,
+    progreso_ruta,
+    finalizacion_idempotente: false,
+  };
 };
 
 const resolveSessionForFinalization = async (sesion_id, estudiante_id, executor = db) =>
@@ -181,6 +346,8 @@ const resolveSessionForFinalization = async (sesion_id, estudiante_id, executor 
       'sesiones_juego.id_sesion_juego',
       'sesiones_juego.estudiante_id',
       'sesiones_juego.dificultad',
+      'sesiones_juego.sesion_clase_id',
+      'sesiones_juego.orden_en_ruta',
       'sesiones_juego.estado_id',
       'estados_sesion.nombre as estado'
     )
@@ -255,10 +422,30 @@ export const iniciar = async (estudiante_id, { minijuego_id, dificultad: request
 
   const minijuego = await resolveMinijuegoCatalog(selectedMinigameId);
   const dificultad = await resolveInitialDifficulty(estudiante_id, minijuego, requestedDifficulty);
+  const fuenteAdaptacion = requestedDifficulty == null ? 'reglas' : 'base';
+  const gameConfig = buildGameConfig(
+    playableContext.grupo_id,
+    minijuego,
+    dificultad,
+    playableContext.sesion_configuracion_base
+  );
+
+  await marcarParticipanteEnProgreso(
+    {
+      sesionClaseId: playableContext.sesion_clase_id,
+      estudianteId: estudiante_id,
+    }
+  );
+
   const sesion = await openStudentGameSession({
     estudiante_id,
     minijuego_id: minijuego.id,
     dificultad,
+    sesion_clase_id: playableContext.sesion_clase_id,
+    orden_en_ruta: playableContext.sesion_paso_actual ?? 1,
+    configuracion_aplicada: gameConfig,
+    fuente_adaptacion: fuenteAdaptacion,
+    executor: db,
   });
 
   return buildSessionStartResponse({
@@ -266,13 +453,21 @@ export const iniciar = async (estudiante_id, { minijuego_id, dificultad: request
     grupoId: playableContext.grupo_id,
     minijuego,
     dificultad,
+    sesionClaseId: playableContext.sesion_clase_id,
+    sesionModo: playableContext.sesion_modo,
+    ordenEnRuta: playableContext.sesion_paso_actual ?? 1,
+    gameConfig,
   });
 };
 
 /**
  * Registra un evento dentro de una sesión activa (acierto, error, combo, etc.)
  */
-export const registrarEvento = async (sesion_id, estudiante_id, { tipo_evento, habilidad, tiempo_reaccion_ms, puntos, combo_en_evento }) => {
+export const registrarEvento = async (
+  sesion_id,
+  estudiante_id,
+  { tipo_evento, habilidad, tiempo_reaccion_ms, puntos, combo_en_evento, metadata }
+) => {
   const sesion = await db('sesiones_juego')
     .where({ id_sesion_juego: sesion_id, estudiante_id })
     .first();
@@ -297,6 +492,17 @@ export const registrarEvento = async (sesion_id, estudiante_id, { tipo_evento, h
     habilidad_id = habilidadRecord.id_habilidad;
   }
 
+  if (sesion.sesion_clase_id != null) {
+    const sesionClase = await db('sesiones_clase')
+      .where({ id_sesion_clase: sesion.sesion_clase_id })
+      .select('estado')
+      .first();
+
+    if (!sesionClase || sesionClase.estado !== 'activa') {
+      throw new AppError('La clase ya no está activa para seguir registrando eventos', 409);
+    }
+  }
+
   const [evento] = await db('eventos_sesion')
     .insert({
       sesion_id,
@@ -305,6 +511,7 @@ export const registrarEvento = async (sesion_id, estudiante_id, { tipo_evento, h
       tiempo_reaccion_ms: tiempo_reaccion_ms ?? null,
       puntos: puntos ?? 0,
       combo_en_evento: combo_en_evento ?? 0,
+      metadata: metadata ?? {},
     })
     .returning('id_evento_sesion');
 
@@ -317,58 +524,14 @@ export const registrarEvento = async (sesion_id, estudiante_id, { tipo_evento, h
 export const finalizar = async (
   sesion_id,
   estudiante_id,
-  { estado = 'completado' } = {}
+  { estado = 'completado' } = {},
+  executor = db
 ) => {
-  return db.transaction(async (trx) => {
-    const sesionExistente = await resolveSessionForFinalization(sesion_id, estudiante_id, trx);
-    if (!sesionExistente) {
-      throw new AppError('Sesión no encontrada', 404);
-    }
+  if (executor === db) {
+    return db.transaction((trx) => finalizarSesionInterna(sesion_id, estudiante_id, { estado }, trx));
+  }
 
-    if (sesionExistente.estado !== 'activo') {
-      const sesionPersistida = await trx('sesiones_juego').where({ id_sesion_juego: sesion_id }).first();
-      return {
-        ...sesionPersistida,
-        resumen_oficial: buildPersistedOfficialSummary(sesionPersistida),
-        logros_desbloqueados: [],
-        finalizacion_idempotente: true,
-      };
-    }
-
-    const estado_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', estado);
-    const officialSummary = await buildOfficialSessionSummary(sesion_id, trx);
-
-    const updateData = {
-      estado_id,
-      finalizada_en: trx.fn.now(),
-      puntaje: officialSummary.puntaje,
-      aciertos: officialSummary.aciertos,
-      errores: officialSummary.errores,
-      combo_maximo: officialSummary.combo_maximo,
-    };
-
-    await trx('sesiones_juego').where({ id_sesion_juego: sesion_id }).update(updateData);
-    await actualizarStats(estudiante_id, sesion_id, trx);
-
-    const logros_desbloqueados = await evaluarLogrosSesion(
-      estudiante_id,
-      {
-        aciertos: officialSummary.aciertos,
-        errores: officialSummary.errores,
-        combo_maximo: officialSummary.combo_maximo,
-        estado,
-      },
-      trx
-    );
-
-    const sesion = await trx('sesiones_juego').where({ id_sesion_juego: sesion_id }).first();
-    return {
-      ...sesion,
-      resumen_oficial: officialSummary,
-      logros_desbloqueados,
-      finalizacion_idempotente: false,
-    };
-  });
+  return finalizarSesionInterna(sesion_id, estudiante_id, { estado }, executor);
 };
 
 /**
@@ -390,6 +553,33 @@ export const finalizarSesionesAutoritativas = async (
   }
 
   return results;
+};
+
+export const abandonarSesionesActivasDeClase = async (
+  sesionClaseId,
+  { estadoSesionJuego = 'abandonado' } = {},
+  executor = db
+) => {
+  const activoId = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'activo', executor);
+  const sessions = await executor('sesiones_juego')
+    .where({
+      sesion_clase_id: sesionClaseId,
+      estado_id: activoId,
+    })
+    .select('id_sesion_juego as sesionId', 'estudiante_id as estudianteId');
+
+  const resultados = [];
+  for (const session of sessions) {
+    const resultado = await finalizar(
+      session.sesionId,
+      session.estudianteId,
+      { estado: estadoSesionJuego },
+      executor
+    );
+    resultados.push(resultado);
+  }
+
+  return resultados;
 };
 
 
@@ -414,6 +604,9 @@ export const listarHistorialEstudiante = (estudiante_id) =>
       'sesiones_juego.aciertos',
       'sesiones_juego.errores',
       'sesiones_juego.combo_maximo',
+      'sesiones_juego.sesion_clase_id',
+      'sesiones_juego.orden_en_ruta',
+      'sesiones_juego.fuente_adaptacion',
       'sesiones_juego.iniciada_en',
       'sesiones_juego.finalizada_en',
       'estados_sesion.nombre as estado',
@@ -441,6 +634,7 @@ export const detalleEventos = async (sesion_id, user) => {
       'eventos_sesion.tiempo_reaccion_ms',
       'eventos_sesion.puntos',
       'eventos_sesion.combo_en_evento',
+      'eventos_sesion.metadata',
       'eventos_sesion.ocurrido_en'
     )
     .orderBy('eventos_sesion.ocurrido_en', 'asc');

@@ -26,6 +26,7 @@ const resolveRealtimeSessionContext = (sesionId, estudianteId) =>
       .join('minijuegos', 'minijuegos.id_minijuego', 'sesiones_juego.minijuego_id')
       .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
       .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
+      .leftJoin('sesiones_clase', 'sesiones_clase.id_sesion_clase', 'sesiones_juego.sesion_clase_id')
   )
     .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
     .where('sesiones_juego.id_sesion_juego', sesionId)
@@ -33,15 +34,16 @@ const resolveRealtimeSessionContext = (sesionId, estudianteId) =>
     .select(
       'sesiones_juego.id_sesion_juego as sesion_id',
       'sesiones_juego.dificultad',
+      'sesiones_juego.orden_en_ruta',
       'estados_sesion.nombre as sesion_estado',
       'estudiantes.id_estudiante as estudiante_id',
       'estudiantes.nombre as estudiante_nombre',
-      'estudiantes.sesion_activa',
       'estudiantes.institucion_id',
       'estados_estudiante.nombre as estudiante_estado',
       'instituciones.activo as institucion_activa',
       'egh.grupo_id',
       'grupos.activo as grupo_activo',
+      'sesiones_clase.estado as clase_estado',
       'minijuegos.slug as minijuego_slug',
       'habilidades.nombre as habilidad_nombre'
     )
@@ -84,7 +86,7 @@ const assertPlayableRealtimeSession = (context) => {
     );
   }
 
-  if (!context.sesion_activa) {
+  if (context.clase_estado !== 'activa') {
     throw new SocketAppError(
       'CLASS_NOT_ACTIVE',
       'Sesion no activa. El tutor debe abrir la clase primero.',

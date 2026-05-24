@@ -3,12 +3,10 @@ import { z } from 'zod';
 /** POST /api/sesiones/iniciar */
 export const iniciarSesionSchema = z.object({
   minijuego_id: z
-    .number({
-      required_error: 'El ID del minijuego es obligatorio',
-      invalid_type_error: 'El ID del minijuego debe ser un número',
-    })
+    .number({ invalid_type_error: 'El ID del minijuego debe ser un número' })
     .int()
-    .positive('El ID del minijuego debe ser un número positivo'),
+    .positive('El ID del minijuego debe ser un número positivo')
+    .optional(),
 
   dificultad: z
     .number({ invalid_type_error: 'El nivel debe ser un número' })
@@ -49,6 +47,8 @@ export const registrarEventoSchema = z.object({
     .int()
     .min(0, 'El combo no puede ser negativo')
     .optional(),
+
+  metadata: z.record(z.any()).optional(),
 });
 
 /** POST /api/sesiones/:id/finalizar */
