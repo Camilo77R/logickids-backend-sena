@@ -58,6 +58,35 @@ const GROUP_FIELDS = [
   `),
   db.raw(`
     (
+      SELECT sc.ruta_pedagogica_id
+      FROM sesiones_clase sc
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+      LIMIT 1
+    ) as sesion_ruta_id
+  `),
+  db.raw(`
+    (
+      SELECT ruta.nombre
+      FROM sesiones_clase sc
+      JOIN rutas_pedagogicas ruta ON ruta.id_ruta_pedagogica = sc.ruta_pedagogica_id
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+      LIMIT 1
+    ) as sesion_ruta_nombre
+  `),
+  db.raw(`
+    (
+      SELECT ruta.slug
+      FROM sesiones_clase sc
+      JOIN rutas_pedagogicas ruta ON ruta.id_ruta_pedagogica = sc.ruta_pedagogica_id
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+      LIMIT 1
+    ) as sesion_ruta_slug
+  `),
+  db.raw(`
+    (
       SELECT COUNT(*)
       FROM sesiones_clase sc
       JOIN sesion_clase_pasos pasos ON pasos.sesion_clase_id = sc.id_sesion_clase
@@ -346,7 +375,11 @@ export const restaurar = async (id_grupo, user) => {
   return obtener(id_grupo, user);
 };
 
-export const toggleSesion = async (id_grupo, user, { sesion_activa, minijuego_id, pasos, modo }) => {
+export const toggleSesion = async (
+  id_grupo,
+  user,
+  { sesion_activa, minijuego_id, niveles, ruta_id, modo }
+) => {
   const group = await assertGroupAssignedToTutor(id_grupo, user);
 
   if (group.activo === false) {
@@ -356,7 +389,16 @@ export const toggleSesion = async (id_grupo, user, { sesion_activa, minijuego_id
   if (!sesion_activa) {
     const sesionActiva = await obtenerSesionClaseActivaPorGrupo(id_grupo);
     if (!sesionActiva) {
-      return { actualizados: 0, sesion_activa: false, minijuego_id: null };
+      return {
+        actualizados: 0,
+        sesion_activa: false,
+        minijuego_id: null,
+        minijuego_slug: null,
+        minijuego_titulo: null,
+        sesion_ruta_id: null,
+        sesion_ruta_slug: null,
+        sesion_ruta_nombre: null,
+      };
     }
 
     const [{ total }] = await db('sesion_clase_participantes')
@@ -376,6 +418,9 @@ export const toggleSesion = async (id_grupo, user, { sesion_activa, minijuego_id
       minijuego_id: null,
       minijuego_slug: null,
       minijuego_titulo: null,
+      sesion_ruta_id: null,
+      sesion_ruta_slug: null,
+      sesion_ruta_nombre: null,
     };
   }
 
@@ -392,7 +437,7 @@ export const toggleSesion = async (id_grupo, user, { sesion_activa, minijuego_id
     );
   }
 
-  const planSesion = await resolvePlanSesionClase({ minijuego_id, pasos, modo });
+  const planSesion = await resolvePlanSesionClase({ minijuego_id, niveles, ruta_id, modo });
 
   await db.transaction(async (trx) => {
     await crearSesionClase(
@@ -416,6 +461,9 @@ export const toggleSesion = async (id_grupo, user, { sesion_activa, minijuego_id
     minijuego_titulo: resumenSesion?.sesion_minijuego_titulo ?? null,
     sesion_clase_id: resumenSesion?.sesion_clase_id ?? null,
     sesion_modo: resumenSesion?.sesion_modo ?? null,
+    sesion_ruta_id: resumenSesion?.sesion_ruta_id ?? null,
+    sesion_ruta_slug: resumenSesion?.sesion_ruta_slug ?? null,
+    sesion_ruta_nombre: resumenSesion?.sesion_ruta_nombre ?? null,
     sesion_total_pasos: Number(resumenSesion?.sesion_total_pasos ?? 0),
   };
 };

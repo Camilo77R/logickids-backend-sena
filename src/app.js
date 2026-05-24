@@ -16,6 +16,7 @@ import logrosRoutes from "./routes/logros.routes.js";
 import estadisticasRoutes from "./routes/estadisticas.routes.js";
 import recomendacionesRoutes from "./routes/recomendaciones.routes.js";
 import minijuegosRoutes from "./routes/minijuegos.routes.js";
+import rutasPedagogicasRoutes from "./routes/rutasPedagogicas.routes.js";
 import { buildCodigoEstelarMobileDebugPage } from "./debug/codigoEstelarMobilePage.js";
 import adminRoutes from "./routes/admin.routes.js";
 import solicitudesRoutes from "./routes/solicitudes.routes.js";
@@ -66,6 +67,7 @@ app.use("/api/logros", logrosRoutes);
 app.use("/api/estadisticas", estadisticasRoutes);
 app.use("/api/recomendaciones", recomendacionesRoutes);
 app.use("/api/minijuegos", minijuegosRoutes);
+app.use("/api/rutas-pedagogicas", rutasPedagogicasRoutes);
 app.use("/api/solicitudes", solicitudesRoutes);
 app.use("/api/ia", iaRoutes);
 

@@ -1,5 +1,6 @@
 import { db } from '../config/db.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import { obtenerRutaPedagogicaActivaPorId } from './rutasPedagogicas.service.js';
 
 export const MODOS_SESION_CLASE = Object.freeze({
   single: 'single',
@@ -34,6 +35,7 @@ const CAMPOS_BASE_SESION_CLASE = [
   'grupo_id',
   'tutor_responsable_id',
   'abierta_por_usuario_id',
+  'ruta_pedagogica_id',
   'modo',
   'estado',
   'abierta_en',
@@ -43,6 +45,8 @@ const CAMPOS_BASE_SESION_CLASE = [
 ];
 
 const MAX_PASOS_POR_SESION = 25;
+const DEFAULT_NIVELES_SINGLE = 3;
+const MAX_NIVELES_POR_BLOQUE = 10;
 
 const normalizarConfiguracionBase = (configuracionBase) => {
   if (!configuracionBase || typeof configuracionBase !== 'object' || Array.isArray(configuracionBase)) {
@@ -67,59 +71,104 @@ const resolveMinijuegosActivos = async (minijuegoIds, executor = db) => {
   return minijuegoIds.map((id) => byId.get(id));
 };
 
-export const resolvePlanSesionClase = async ({ modo, minijuego_id, pasos }, executor = db) => {
-  const pasosEntrada = Array.isArray(pasos) && pasos.length
-    ? pasos
-    : minijuego_id
-      ? [{ minijuego_id }]
-      : [];
+const normalizeNiveles = (niveles, fieldName = 'niveles') => {
+  const normalized = niveles ?? DEFAULT_NIVELES_SINGLE;
 
-  if (!pasosEntrada.length) {
-    throw new AppError('Debes indicar al menos un minijuego para abrir la sesión', 400);
+  if (!Number.isInteger(normalized) || normalized <= 0) {
+    throw new AppError(`El campo ${fieldName} debe ser un entero positivo`, 400);
   }
 
-  if (pasosEntrada.length > MAX_PASOS_POR_SESION) {
+  if (normalized > MAX_NIVELES_POR_BLOQUE) {
+    throw new AppError(
+      `El campo ${fieldName} no puede superar ${MAX_NIVELES_POR_BLOQUE} niveles`,
+      400
+    );
+  }
+
+  return normalized;
+};
+
+const expandBloqueEnPasos = ({ bloqueOrden, minijuego, niveles, configuracionBase }) =>
+  Array.from({ length: niveles }, (_unused, index) => ({
+    bloque_orden: bloqueOrden,
+    nivel_en_bloque: index + 1,
+    minijuego_id: minijuego.id,
+    minijuego_slug: minijuego.slug,
+    minijuego_titulo: minijuego.titulo,
+    configuracion_base: normalizarConfiguracionBase(configuracionBase),
+  }));
+
+const buildPasosConOrdenGlobal = (pasosSinOrden) =>
+  pasosSinOrden.map((paso, index) => ({
+    ...paso,
+    orden: index + 1,
+  }));
+
+export const resolvePlanSesionClase = async (
+  { modo, minijuego_id, niveles, ruta_id },
+  executor = db
+) => {
+  if (!Object.values(MODOS_SESION_CLASE).includes(modo)) {
+    throw new AppError('El modo de sesión solicitado no es válido', 400);
+  }
+
+  if (modo === MODOS_SESION_CLASE.single) {
+    const minijuegoId = Number(minijuego_id);
+    if (!Number.isInteger(minijuegoId) || minijuegoId <= 0) {
+      throw new AppError('Debes indicar un minijuego válido para abrir una sesión single', 400);
+    }
+
+    const totalNiveles = normalizeNiveles(niveles, 'niveles');
+    const [minijuego] = await resolveMinijuegosActivos([minijuegoId], executor);
+    const pasos = buildPasosConOrdenGlobal(
+      expandBloqueEnPasos({
+        bloqueOrden: 1,
+        minijuego,
+        niveles: totalNiveles,
+        configuracionBase: {},
+      })
+    );
+
+    return {
+      modo,
+      ruta_pedagogica_id: null,
+      pasos,
+    };
+  }
+
+  const route = await obtenerRutaPedagogicaActivaPorId(ruta_id, executor);
+  const pasos = buildPasosConOrdenGlobal(
+    route.bloques.flatMap((bloque) =>
+      expandBloqueEnPasos({
+        bloqueOrden: bloque.orden,
+        minijuego: {
+          id: bloque.minijuego_id,
+          slug: bloque.minijuego_slug,
+          titulo: bloque.minijuego_titulo,
+        },
+        niveles: normalizeNiveles(bloque.niveles, `niveles del bloque ${bloque.orden}`),
+        configuracionBase: bloque.configuracion_base,
+      })
+    )
+  );
+
+  if (pasos.length < 2) {
+    throw new AppError('Una sesión path requiere al menos dos niveles en total', 400);
+  }
+
+  if (pasos.length > MAX_PASOS_POR_SESION) {
     throw new AppError(
       `La sesión no puede tener más de ${MAX_PASOS_POR_SESION} pasos configurados`,
       400
     );
   }
 
-  const minijuegoIds = pasosEntrada.map((paso, index) => {
-    const id = Number(paso.minijuego_id);
-    if (!Number.isInteger(id) || id <= 0) {
-      throw new AppError(`El minijuego del paso ${index + 1} no es válido`, 400);
-    }
-
-    return id;
-  });
-
-  const minijuegos = await resolveMinijuegosActivos(minijuegoIds, executor);
-  const modoNormalizado =
-    modo ??
-    (pasosEntrada.length > 1 ? MODOS_SESION_CLASE.path : MODOS_SESION_CLASE.single);
-
-  if (!Object.values(MODOS_SESION_CLASE).includes(modoNormalizado)) {
-    throw new AppError('El modo de sesión solicitado no es válido', 400);
-  }
-
-  if (modoNormalizado === MODOS_SESION_CLASE.single && pasosEntrada.length !== 1) {
-    throw new AppError('Una sesión single solo puede abrirse con un paso', 400);
-  }
-
-  if (modoNormalizado === MODOS_SESION_CLASE.path && pasosEntrada.length < 2) {
-    throw new AppError('Una sesión path requiere al menos dos minijuegos', 400);
-  }
-
   return {
-    modo: modoNormalizado,
-    pasos: pasosEntrada.map((paso, index) => ({
-      orden: index + 1,
-      minijuego_id: minijuegos[index].id,
-      minijuego_slug: minijuegos[index].slug,
-      minijuego_titulo: minijuegos[index].titulo,
-      configuracion_base: normalizarConfiguracionBase(paso.configuracion_base),
-    })),
+    modo,
+    ruta_pedagogica_id: route.id,
+    ruta_pedagogica_slug: route.slug,
+    ruta_pedagogica_nombre: route.nombre,
+    pasos,
   };
 };
 
@@ -139,6 +188,8 @@ export const listarPasosSesionClase = (sesionClaseId, executor = db) =>
     .select(
       'sesion_clase_pasos.id_sesion_clase_paso as id',
       'sesion_clase_pasos.orden',
+      'sesion_clase_pasos.bloque_orden',
+      'sesion_clase_pasos.nivel_en_bloque',
       'sesion_clase_pasos.minijuego_id',
       'sesion_clase_pasos.configuracion_base',
       'minijuegos.slug',
@@ -156,6 +207,8 @@ export const obtenerPasoSesionClase = async (sesionClaseId, orden, executor = db
     .select(
       'sesion_clase_pasos.id_sesion_clase_paso as id',
       'sesion_clase_pasos.orden',
+      'sesion_clase_pasos.bloque_orden',
+      'sesion_clase_pasos.nivel_en_bloque',
       'sesion_clase_pasos.minijuego_id',
       'sesion_clase_pasos.configuracion_base',
       'minijuegos.slug',
@@ -178,6 +231,7 @@ export const crearSesionClase = async (
       grupo_id: grupoId,
       tutor_responsable_id: tutorResponsableId,
       abierta_por_usuario_id: abiertaPorUsuarioId,
+      ruta_pedagogica_id: planSesion.ruta_pedagogica_id ?? null,
       modo: planSesion.modo,
       estado: ESTADOS_SESION_CLASE.activa,
     })
@@ -187,6 +241,8 @@ export const crearSesionClase = async (
     planSesion.pasos.map((paso) => ({
       sesion_clase_id: sesionClase.id,
       orden: paso.orden,
+      bloque_orden: paso.bloque_orden,
+      nivel_en_bloque: paso.nivel_en_bloque,
       minijuego_id: paso.minijuego_id,
       configuracion_base: paso.configuracion_base ?? {},
     }))
@@ -210,6 +266,7 @@ export const crearSesionClase = async (
 
 export const obtenerResumenSesionActivaParaGrupo = async (grupoId, executor = db) =>
   executor('sesiones_clase as sc')
+    .leftJoin('rutas_pedagogicas as ruta', 'ruta.id_ruta_pedagogica', 'sc.ruta_pedagogica_id')
     .join('sesion_clase_pasos as paso', function joinPrimerPaso() {
       this.on('paso.sesion_clase_id', 'sc.id_sesion_clase').andOn('paso.orden', db.raw('1'));
     })
@@ -221,6 +278,9 @@ export const obtenerResumenSesionActivaParaGrupo = async (grupoId, executor = db
     .select(
       'sc.id_sesion_clase as sesion_clase_id',
       'sc.modo as sesion_modo',
+      'sc.ruta_pedagogica_id as sesion_ruta_id',
+      'ruta.slug as sesion_ruta_slug',
+      'ruta.nombre as sesion_ruta_nombre',
       'paso.minijuego_id as sesion_minijuego_id',
       'm.slug as sesion_minijuego_slug',
       'm.titulo as sesion_minijuego_titulo',
@@ -235,6 +295,7 @@ export const obtenerResumenSesionActivaParaEstudiante = async (
   executor = db
 ) =>
   executor('sesiones_clase as sc')
+    .leftJoin('rutas_pedagogicas as ruta', 'ruta.id_ruta_pedagogica', 'sc.ruta_pedagogica_id')
     .join('sesion_clase_participantes as participante', function joinParticipante() {
       this.on('participante.sesion_clase_id', 'sc.id_sesion_clase')
         .andOn('participante.estudiante_id', db.raw('?', [estudianteId]));
@@ -251,8 +312,13 @@ export const obtenerResumenSesionActivaParaEstudiante = async (
     .select(
       'sc.id_sesion_clase as sesion_clase_id',
       'sc.modo as sesion_modo',
+      'sc.ruta_pedagogica_id as sesion_ruta_id',
+      'ruta.slug as sesion_ruta_slug',
+      'ruta.nombre as sesion_ruta_nombre',
       'participante.estado as sesion_participante_estado',
       'participante.paso_actual as sesion_paso_actual',
+      'paso.bloque_orden as sesion_bloque_actual',
+      'paso.nivel_en_bloque as sesion_nivel_en_bloque',
       'paso.minijuego_id as sesion_minijuego_id',
       'm.slug as sesion_minijuego_slug',
       'm.titulo as sesion_minijuego_titulo',

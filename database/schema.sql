@@ -177,9 +177,12 @@ CREATE TABLE IF NOT EXISTS public.minijuegos
     habilidad_id integer NOT NULL,
     dificultad_maxima integer NOT NULL DEFAULT 4,
     activo boolean NOT NULL DEFAULT true,
+    visible_en_catalogo boolean NOT NULL DEFAULT true,
+    orden_catalogo integer NOT NULL DEFAULT 100,
     creado_en timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT minijuegos_pkey PRIMARY KEY (id_minijuego),
-    CONSTRAINT minijuegos_slug_key UNIQUE (slug)
+    CONSTRAINT minijuegos_slug_key UNIQUE (slug),
+    CONSTRAINT ck_minijuegos_orden_catalogo CHECK (orden_catalogo > 0)
 );
 
 CREATE TABLE IF NOT EXISTS public.modelos_ia
@@ -224,12 +227,42 @@ CREATE TABLE IF NOT EXISTS public.roles
     CONSTRAINT roles_nombre_key UNIQUE (nombre)
 );
 
+CREATE TABLE IF NOT EXISTS public.rutas_pedagogicas
+(
+    id_ruta_pedagogica integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    slug character varying(60) COLLATE pg_catalog."default" NOT NULL,
+    nombre character varying(120) COLLATE pg_catalog."default" NOT NULL,
+    descripcion text COLLATE pg_catalog."default",
+    activo boolean NOT NULL DEFAULT true,
+    visible_en_catalogo boolean NOT NULL DEFAULT true,
+    orden_catalogo integer NOT NULL DEFAULT 100,
+    creado_en timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT rutas_pedagogicas_pkey PRIMARY KEY (id_ruta_pedagogica),
+    CONSTRAINT rutas_pedagogicas_slug_key UNIQUE (slug),
+    CONSTRAINT ck_rutas_pedagogicas_orden_catalogo CHECK (orden_catalogo > 0)
+);
+
+CREATE TABLE IF NOT EXISTS public.ruta_pedagogica_bloques
+(
+    id_ruta_pedagogica_bloque integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    ruta_pedagogica_id integer NOT NULL,
+    orden integer NOT NULL,
+    minijuego_id integer NOT NULL,
+    niveles integer NOT NULL DEFAULT 1,
+    configuracion_base jsonb NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT ruta_pedagogica_bloques_pkey PRIMARY KEY (id_ruta_pedagogica_bloque),
+    CONSTRAINT ck_ruta_pedagogica_bloques_orden CHECK (orden > 0),
+    CONSTRAINT ck_ruta_pedagogica_bloques_niveles CHECK (niveles > 0),
+    CONSTRAINT uq_ruta_pedagogica_bloques_orden UNIQUE (ruta_pedagogica_id, orden)
+);
+
 CREATE TABLE IF NOT EXISTS public.sesiones_clase
 (
     id_sesion_clase integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
     grupo_id integer NOT NULL,
     tutor_responsable_id integer NOT NULL,
     abierta_por_usuario_id integer NOT NULL,
+    ruta_pedagogica_id integer,
     modo character varying(20) COLLATE pg_catalog."default" NOT NULL,
     estado character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'activa'::character varying,
     abierta_en timestamp with time zone NOT NULL DEFAULT now(),
@@ -250,10 +283,14 @@ CREATE TABLE IF NOT EXISTS public.sesion_clase_pasos
     id_sesion_clase_paso integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
     sesion_clase_id integer NOT NULL,
     orden integer NOT NULL,
+    bloque_orden integer NOT NULL DEFAULT 1,
+    nivel_en_bloque integer NOT NULL DEFAULT 1,
     minijuego_id integer NOT NULL,
     configuracion_base jsonb NOT NULL DEFAULT '{}'::jsonb,
     CONSTRAINT sesion_clase_pasos_pkey PRIMARY KEY (id_sesion_clase_paso),
     CONSTRAINT ck_sesion_clase_pasos_orden CHECK (orden > 0),
+    CONSTRAINT ck_sesion_clase_pasos_bloque_orden CHECK (bloque_orden > 0),
+    CONSTRAINT ck_sesion_clase_pasos_nivel_en_bloque CHECK (nivel_en_bloque > 0),
     CONSTRAINT uq_sesion_clase_pasos_orden UNIQUE (sesion_clase_id, orden)
 );
 
@@ -513,6 +550,29 @@ ALTER TABLE IF EXISTS public.minijuegos
 CREATE INDEX IF NOT EXISTS idx_minijuegos_habilidad
     ON public.minijuegos(habilidad_id);
 
+CREATE INDEX IF NOT EXISTS idx_minijuegos_catalogo_visible
+    ON public.minijuegos(visible_en_catalogo, orden_catalogo);
+
+
+ALTER TABLE IF EXISTS public.ruta_pedagogica_bloques
+    ADD CONSTRAINT ruta_pedagogica_bloques_minijuego_id_fkey FOREIGN KEY (minijuego_id)
+    REFERENCES public.minijuegos (id_minijuego) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE NO ACTION;
+CREATE INDEX IF NOT EXISTS idx_ruta_pedagogica_bloques_minijuego
+    ON public.ruta_pedagogica_bloques(minijuego_id);
+
+ALTER TABLE IF EXISTS public.ruta_pedagogica_bloques
+    ADD CONSTRAINT ruta_pedagogica_bloques_ruta_pedagogica_id_fkey FOREIGN KEY (ruta_pedagogica_id)
+    REFERENCES public.rutas_pedagogicas (id_ruta_pedagogica) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_ruta_pedagogica_bloques_ruta
+    ON public.ruta_pedagogica_bloques(ruta_pedagogica_id);
+
+CREATE INDEX IF NOT EXISTS idx_rutas_pedagogicas_catalogo
+    ON public.rutas_pedagogicas(visible_en_catalogo, orden_catalogo);
+
 
 ALTER TABLE IF EXISTS public.recomendaciones
     ADD CONSTRAINT recomendaciones_estudiante_id_fkey FOREIGN KEY (estudiante_id)
@@ -565,6 +625,14 @@ CREATE INDEX IF NOT EXISTS idx_sesiones_clase_abierta_por
     ON public.sesiones_clase(abierta_por_usuario_id);
 
 ALTER TABLE IF EXISTS public.sesiones_clase
+    ADD CONSTRAINT sesiones_clase_ruta_pedagogica_id_fkey FOREIGN KEY (ruta_pedagogica_id)
+    REFERENCES public.rutas_pedagogicas (id_ruta_pedagogica) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_sesiones_clase_ruta_pedagogica
+    ON public.sesiones_clase(ruta_pedagogica_id);
+
+ALTER TABLE IF EXISTS public.sesiones_clase
     ADD CONSTRAINT sesiones_clase_grupo_id_fkey FOREIGN KEY (grupo_id)
     REFERENCES public.grupos (id_grupo) MATCH SIMPLE
     ON UPDATE NO ACTION
@@ -598,6 +666,9 @@ ALTER TABLE IF EXISTS public.sesion_clase_pasos
     ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_sesion_clase_pasos_sesion
     ON public.sesion_clase_pasos(sesion_clase_id);
+
+CREATE INDEX IF NOT EXISTS idx_sesion_clase_pasos_bloque
+    ON public.sesion_clase_pasos(sesion_clase_id, bloque_orden, nivel_en_bloque);
 
 ALTER TABLE IF EXISTS public.sesion_clase_participantes
     ADD CONSTRAINT sesion_clase_participantes_estudiante_id_fkey FOREIGN KEY (estudiante_id)

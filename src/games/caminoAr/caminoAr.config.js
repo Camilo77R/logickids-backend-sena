@@ -40,15 +40,13 @@ export const buildCaminoArGameConfig = (dificultad, configuracionBase = {}) => {
     CAMINO_AR_DIFFICULTY_PRESETS[dificultad] ?? CAMINO_AR_DIFFICULTY_PRESETS[4];
 
   return {
-    ...configuracionBase,
     dificultad,
-    fuente_adaptacion: 'base',
-    version_adaptacion: 'v1-base',
     cantidad_baldosas: preset.cantidad_baldosas,
     longitud_patron: preset.longitud_patron,
     duracion_destello_ms: preset.duracion_destello_ms,
     pausa_entre_destellos_ms: preset.pausa_entre_destellos_ms,
     tiempo_limite_ms: preset.tiempo_limite_ms,
     ayudas_disponibles: preset.ayudas_disponibles,
+    ...configuracionBase,
   };
 };
