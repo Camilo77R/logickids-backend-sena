@@ -1,0 +1,11 @@
+estudiante_id,nombre_estudiante,edad,institucion_id,nombre_institucion,grupo_id,nombre_grupo,habilidad_id,habilidad,total_intentos,aciertos,errores,precision_porcentaje,tiempo_reaccion_ms,fecha_corte_estadistica,severidad_sugerida
+1,Juan Demo,8,1,Institucion Demo Tutor,1,Grupo Demo,1,Lógica,20,16,4,80.00,620,2026-05-08T14:22:32.307Z,baja
+1,Juan Demo,8,1,Institucion Demo Tutor,1,Grupo Demo,2,Memoria,20,8,12,40.00,980,2026-05-08T14:22:32.307Z,alta
+2,Mauro Demo,9,1,Institucion Demo Tutor,1,Grupo Demo,1,Lógica,30,18,12,60.00,820,2026-05-08T15:29:28.203Z,media
+2,Mauro Demo,9,1,Institucion Demo Tutor,1,Grupo Demo,2,Memoria,30,10,20,33.33,1100,2026-05-08T15:29:28.203Z,alta
+2,Mauro Demo,9,1,Institucion Demo Tutor,1,Grupo Demo,3,Atención,30,24,6,80.00,650,2026-05-08T15:29:28.203Z,baja
+7,Ana García,10,1,Institucion Demo Tutor,5,Grupo Matemáticas 5A,1,Lógica,18,15,3,83.33,1167,2026-05-13T15:32:18.892Z,baja
+17,Estudiante codigo-estelar-1778686355293-68ziqp,8,21,Inst codigo-estelar-1778686355293-68ziqp,15,Grupo codigo-estelar-1778686355293-68ziqp,1,Lógica,7,7,0,100.00,1000,2026-05-13T15:32:35.741Z,baja
+19,Estudiante codigo-estelar-1778686355852-d2zrji,8,23,Inst codigo-estelar-1778686355852-d2zrji,17,Grupo codigo-estelar-1778686355852-d2zrji,1,Lógica,3,2,1,66.67,1167,2026-05-13T15:32:36.239Z,media
+20,Estudiante codigo-estelar-1778686356253-tzyve3,8,24,Inst codigo-estelar-1778686356253-tzyve3,18,Grupo codigo-estelar-1778686356253-tzyve3,1,Lógica,1,1,0,100.00,1000,2026-05-13T15:32:36.643Z,baja
+22,Estudiante Demo 1 1778688336820-qc5cc,8,26,Inst Demo Codigo Estelar 1778688336820-qc5cc,20,Grupo Demo 1778688336820-qc5cc,1,Lógica,18,15,3,83.33,1000,2026-05-13T17:05:50.805Z,baja
