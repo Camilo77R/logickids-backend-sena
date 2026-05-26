@@ -436,4 +436,19 @@ La decisión oficial actual es:
 
 No estamos usando `path` personalizado todavía.
 
+---
+
+## Referencia de estados
+
+Para la semántica oficial de:
+
+- `sesion_juego`
+- `participante`
+- `sesion_clase`
+- `completado` vs `abandonado` vs `cerrado`
+
+ver:
+
+- [MATRIZ_ESTADOS_SESIONES_Y_PARTICIPANTES.md](./MATRIZ_ESTADOS_SESIONES_Y_PARTICIPANTES.md)
+
 Si eso se implementa después, será una evolución formal del contrato, no una improvisación desde frontend.

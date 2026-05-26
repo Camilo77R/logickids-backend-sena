@@ -273,7 +273,7 @@ const openStudentGameSession = async ({
 const finalizarSesionInterna = async (
   sesion_id,
   estudiante_id,
-  { estado = 'completado' } = {},
+  { estado = 'completado', cerrarSesionClase = true } = {},
   executor = db
 ) => {
   const sesionExistente = await resolveSessionForFinalization(sesion_id, estudiante_id, executor);
@@ -331,7 +331,9 @@ const finalizarSesionInterna = async (
       executor
     );
 
-    await cerrarSesionClaseSiTermino(sesionExistente.sesion_clase_id, executor);
+    if (cerrarSesionClase) {
+      await cerrarSesionClaseSiTermino(sesionExistente.sesion_clase_id, executor);
+    }
   }
 
   const sesion = await executor('sesiones_juego').where({ id_sesion_juego: sesion_id }).first();
@@ -536,14 +538,21 @@ export const registrarEvento = async (
 export const finalizar = async (
   sesion_id,
   estudiante_id,
-  { estado = 'completado' } = {},
+  { estado = 'completado', cerrarSesionClase = true } = {},
   executor = db
 ) => {
   if (executor === db) {
-    return db.transaction((trx) => finalizarSesionInterna(sesion_id, estudiante_id, { estado }, trx));
+    return db.transaction((trx) =>
+      finalizarSesionInterna(sesion_id, estudiante_id, { estado, cerrarSesionClase }, trx)
+    );
   }
 
-  return finalizarSesionInterna(sesion_id, estudiante_id, { estado }, executor);
+  return finalizarSesionInterna(
+    sesion_id,
+    estudiante_id,
+    { estado, cerrarSesionClase },
+    executor
+  );
 };
 
 /**
@@ -585,7 +594,7 @@ export const abandonarSesionesActivasDeClase = async (
     const resultado = await finalizar(
       session.sesionId,
       session.estudianteId,
-      { estado: estadoSesionJuego },
+      { estado: estadoSesionJuego, cerrarSesionClase: false },
       executor
     );
     resultados.push(resultado);
@@ -608,6 +617,14 @@ export const listarHistorialEstudiante = (estudiante_id) =>
     .join('minijuegos', 'minijuegos.id_minijuego', 'sesiones_juego.minijuego_id')
     .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
     .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
+    .leftJoin('sesiones_clase as sc', 'sc.id_sesion_clase', 'sesiones_juego.sesion_clase_id')
+    .leftJoin('rutas_pedagogicas as ruta', 'ruta.id_ruta_pedagogica', 'sc.ruta_pedagogica_id')
+    .leftJoin('sesion_clase_pasos as paso', function joinPasoHistorial() {
+      this.on('paso.sesion_clase_id', 'sesiones_juego.sesion_clase_id').andOn(
+        'paso.orden',
+        'sesiones_juego.orden_en_ruta'
+      );
+    })
     .where('sesiones_juego.estudiante_id', estudiante_id)
     .select(
       'sesiones_juego.id_sesion_juego as id',
@@ -618,13 +635,21 @@ export const listarHistorialEstudiante = (estudiante_id) =>
       'sesiones_juego.combo_maximo',
       'sesiones_juego.sesion_clase_id',
       'sesiones_juego.orden_en_ruta',
+      'sc.modo as sesion_modo',
+      'sc.ruta_pedagogica_id as sesion_ruta_id',
+      'ruta.nombre as sesion_ruta_nombre',
+      'paso.bloque_orden',
+      'paso.nivel_en_bloque',
       'sesiones_juego.fuente_adaptacion',
       'sesiones_juego.iniciada_en',
       'sesiones_juego.finalizada_en',
       'estados_sesion.nombre as estado',
       'minijuegos.titulo as minijuego',
       'minijuegos.slug',
-      'habilidades.nombre as habilidad'
+      'habilidades.nombre as habilidad',
+      db.raw(
+        '(SELECT COUNT(*) FROM sesion_clase_pasos pasos WHERE pasos.sesion_clase_id = sesiones_juego.sesion_clase_id) as sesion_total_pasos'
+      )
     )
     .orderBy('sesiones_juego.iniciada_en', 'desc')
     .limit(50);

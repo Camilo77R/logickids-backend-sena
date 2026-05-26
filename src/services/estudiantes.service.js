@@ -139,7 +139,7 @@ const closeClassStateForStudent = async (id_estudiante, executor = db) => {
     const resultado = await finalizar(
       sesion.id,
       id_estudiante,
-      { estado: 'abandonado' },
+      { estado: 'abandonado', cerrarSesionClase: false },
       executor
     );
     if (resultado.sesion_clase_id != null) {
