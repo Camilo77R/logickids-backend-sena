@@ -1,13 +1,43 @@
-estudiante_id,nombre_estudiante,edad,grupo_id,nombre_grupo,habilidad,total_intentos,aciertos,errores,precision_porcentaje,tiempo_reaccion_ms,fecha_evaluacion,nivel_logro,recomendacion_manual
-101,Ana Pérez,8,1,Grupo A,Lógica,30,25,5,83.33,450,2026-05-01,Avanzado,Seguir practicando secuencias
-101,Ana Pérez,8,1,Grupo A,Memoria,20,12,8,60.00,520,2026-05-01,Intermedio,Necesita mejorar memoria visual
-101,Ana Pérez,8,1,Grupo A,Atención,25,22,3,88.00,380,2026-05-01,Avanzado,Mantener nivel
-102,Luis Gómez,9,1,Grupo A,Lógica,35,21,14,60.00,580,2026-05-01,Intermedio,Trabajar en razonamiento lógico
-102,Luis Gómez,9,1,Grupo A,Memoria,18,14,4,77.78,490,2026-05-01,Intermedio,Continuar así
-102,Luis Gómez,9,1,Grupo A,Atención,28,20,8,71.43,420,2026-05-01,Intermedio,Mejorar concentración
-103,Carlos Ruiz,7,2,Grupo B,Lógica,15,12,3,80.00,500,2026-05-02,Intermedio,Buen nivel
-103,Carlos Ruiz,7,2,Grupo B,Memoria,12,8,4,66.67,480,2026-05-02,Básico,Necesita práctica diaria de memoria
-104,Valentina Díaz,9,2,Grupo B,Razonamiento,40,35,5,87.50,400,2026-05-02,Avanzado,Excelente razonamiento
-104,Valentina Díaz,9,2,Grupo B,Velocidad,35,28,7,80.00,350,2026-05-02,Avanzado,Mantener velocidad de procesamiento
-105,Samuel López,10,3,Grupo C,Lógica,50,30,20,60.00,550,2026-05-03,Intermedio,Fortalecer lógica básica
-105,Samuel López,10,3,Grupo C,Memoria,40,25,15,62.50,510,2026-05-03,Intermedio,Memoria a corto plazo por mejorar
+estudiante_id,nombre_estudiante,edad,institucion_id,nombre_institucion,grupo_id,nombre_grupo,habilidad_id,habilidad,total_intentos,aciertos,errores,precision_porcentaje,tiempo_reaccion_ms,fecha_evaluacion,nivel_logro,severidad_sugerida
+101,Ana Pérez,8,1,Colegio Prueba,1,Grupo A,1,Lógica,30,25,5,83.33,450,2026-05-01,Avanzado,baja
+101,Ana Pérez,8,1,Colegio Prueba,1,Grupo A,2,Memoria,20,12,8,60.00,520,2026-05-01,Intermedio,media
+101,Ana Pérez,8,1,Colegio Prueba,1,Grupo A,3,Atención,25,22,3,88.00,380,2026-05-01,Avanzado,baja
+102,Luis Gómez,9,1,Colegio Prueba,1,Grupo A,1,Lógica,35,21,14,60.00,580,2026-05-01,Intermedio,media
+102,Luis Gómez,9,1,Colegio Prueba,1,Grupo A,2,Memoria,18,14,4,77.78,490,2026-05-01,Intermedio,baja
+102,Luis Gómez,9,1,Colegio Prueba,1,Grupo A,3,Atención,28,20,8,71.43,420,2026-05-01,Intermedio,baja
+103,Carlos Ruiz,7,1,Colegio Prueba,2,Grupo B,1,Lógica,15,12,3,80.00,500,2026-05-02,Intermedio,baja
+103,Carlos Ruiz,7,1,Colegio Prueba,2,Grupo B,2,Memoria,12,8,4,66.67,480,2026-05-02,Básico,media
+104,Valentina Díaz,9,1,Colegio Prueba,2,Grupo B,4,Razonamiento,40,35,5,87.50,400,2026-05-02,Avanzado,baja
+104,Valentina Díaz,9,1,Colegio Prueba,2,Grupo B,5,Velocidad,35,28,7,80.00,350,2026-05-02,Avanzado,baja
+105,Samuel López,10,1,Colegio Prueba,3,Grupo C,1,Lógica,50,30,20,60.00,550,2026-05-03,Intermedio,media
+105,Samuel López,10,1,Colegio Prueba,3,Grupo C,2,Memoria,40,25,15,62.50,510,2026-05-03,Intermedio,media
+106,Mariana Torres,8,1,Colegio Prueba,1,Grupo A,1,Lógica,24,11,13,45.83,310,2026-05-04,Intermedio,alta
+106,Mariana Torres,8,1,Colegio Prueba,1,Grupo A,3,Atención,24,10,14,41.67,290,2026-05-04,Básico,alta
+106,Mariana Torres,8,1,Colegio Prueba,1,Grupo A,2,Memoria,20,15,5,75.00,470,2026-05-04,Intermedio,baja
+107,Tomás Herrera,9,1,Colegio Prueba,2,Grupo B,1,Lógica,32,25,7,78.13,1280,2026-05-04,Intermedio,baja
+107,Tomás Herrera,9,1,Colegio Prueba,2,Grupo B,4,Razonamiento,30,23,7,76.67,1340,2026-05-04,Intermedio,baja
+107,Tomás Herrera,9,1,Colegio Prueba,2,Grupo B,5,Velocidad,28,19,9,67.86,1420,2026-05-04,Intermedio,media
+108,Sofía Ramírez,7,1,Colegio Prueba,3,Grupo C,2,Memoria,18,7,11,38.89,1180,2026-05-05,Básico,alta
+108,Sofía Ramírez,7,1,Colegio Prueba,3,Grupo C,3,Atención,18,9,9,50.00,980,2026-05-05,Intermedio,media
+108,Sofía Ramírez,7,1,Colegio Prueba,3,Grupo C,1,Lógica,18,13,5,72.22,760,2026-05-05,Intermedio,baja
+109,Diego Castro,10,1,Colegio Prueba,2,Grupo B,2,Memoria,36,14,22,38.89,900,2026-05-05,Básico,alta
+109,Diego Castro,10,1,Colegio Prueba,2,Grupo B,3,Atención,36,16,20,44.44,870,2026-05-05,Básico,alta
+109,Diego Castro,10,1,Colegio Prueba,2,Grupo B,1,Lógica,36,24,12,66.67,730,2026-05-05,Intermedio,media
+110,Lucía Méndez,8,1,Colegio Prueba,1,Grupo A,1,Lógica,26,23,3,88.46,640,2026-05-06,Avanzado,baja
+110,Lucía Méndez,8,1,Colegio Prueba,1,Grupo A,2,Memoria,26,21,5,80.77,690,2026-05-06,Avanzado,baja
+110,Lucía Méndez,8,1,Colegio Prueba,1,Grupo A,3,Atención,26,24,2,92.31,610,2026-05-06,Avanzado,baja
+111,Emilia Navarro,7,1,Colegio Prueba,3,Grupo C,3,Atención,8,3,5,37.50,340,2026-05-06,Básico,alta
+111,Emilia Navarro,7,1,Colegio Prueba,3,Grupo C,2,Memoria,8,4,4,50.00,420,2026-05-06,Intermedio,media
+111,Emilia Navarro,7,1,Colegio Prueba,3,Grupo C,1,Lógica,8,6,2,75.00,510,2026-05-06,Intermedio,baja
+112,Gabriel Pardo,9,1,Colegio Prueba,2,Grupo B,5,Velocidad,42,35,7,83.33,260,2026-05-07,Avanzado,baja
+112,Gabriel Pardo,9,1,Colegio Prueba,2,Grupo B,1,Lógica,42,29,13,69.05,310,2026-05-07,Intermedio,media
+112,Gabriel Pardo,9,1,Colegio Prueba,2,Grupo B,3,Atención,42,28,14,66.67,280,2026-05-07,Intermedio,media
+113,Paula Ríos,10,1,Colegio Prueba,3,Grupo C,2,Memoria,30,17,13,56.67,1120,2026-05-07,Intermedio,media
+113,Paula Ríos,10,1,Colegio Prueba,3,Grupo C,4,Razonamiento,30,16,14,53.33,1190,2026-05-07,Intermedio,media
+113,Paula Ríos,10,1,Colegio Prueba,3,Grupo C,1,Lógica,30,21,9,70.00,980,2026-05-07,Intermedio,baja
+114,Nicolás Vega,8,1,Colegio Prueba,1,Grupo A,1,Lógica,14,7,7,50.00,1500,2026-05-08,Intermedio,media
+114,Nicolás Vega,8,1,Colegio Prueba,1,Grupo A,2,Memoria,14,6,8,42.86,1440,2026-05-08,Básico,alta
+114,Nicolás Vega,8,1,Colegio Prueba,1,Grupo A,3,Atención,14,10,4,71.43,1380,2026-05-08,Intermedio,baja
+115,Isabela León,9,1,Colegio Prueba,3,Grupo C,1,Lógica,34,31,3,91.18,390,2026-05-08,Avanzado,baja
+115,Isabela León,9,1,Colegio Prueba,3,Grupo C,2,Memoria,34,27,7,79.41,430,2026-05-08,Intermedio,baja
+115,Isabela León,9,1,Colegio Prueba,3,Grupo C,3,Atención,34,29,5,85.29,410,2026-05-08,Avanzado,baja

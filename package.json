@@ -9,6 +9,7 @@
     "start": "node src/server.js",
     "provision:codigo-estelar": "node scripts/provision-codigo-estelar-demo.mjs",
     "provision:codigo-estelar:6": "node scripts/provision-codigo-estelar-demo.mjs --students=6",
+    "dataset:export:recomendaciones": "node scripts/export-recommendation-dataset.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -1,0 +1,38 @@
+recomendacion_id,tipo_recomendacion,estudiante_id,nombre_estudiante,grupo_id,nombre_grupo,habilidad_id,habilidad,precision_momento,severidad,modelo_ia,mensaje_objetivo,generado_en,activo
+13,grupo,,,5,Grupo Matemáticas 5A,1,Lógica,83.33,baja,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-13T22:51:18.751Z,true
+12,estudiante,7,Ana García,5,Grupo Matemáticas 5A,1,Lógica,83.33,media,gemini-1.5-flash,Ana muestra buena comprensión de secuencias lógicas con una precisión del 83%. Recomiendo continuar practicando con niveles de dificultad media para mantener el engagement.,2026-05-13T15:32:18.892Z,true
+11,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T15:20:55.995Z,true
+10,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T15:20:55.424Z,true
+9,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T15:20:54.121Z,true
+8,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T15:15:39.640Z,true
+7,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T15:15:39.485Z,true
+6,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T15:15:39.093Z,true
+5,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T15:15:38.422Z,true
+4,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T14:33:37.500Z,true
+3,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T14:32:26.709Z,true
+2,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T14:32:25.873Z,true
+1,estudiante,1,Juan Demo,1,Grupo Demo,2,Memoria,40.00,media,gemini-1.5-flash,"[Recomendación simulada]
+
+Se recomienda reforzar la habilidad con menor precisión mediante actividades graduales, dar más tiempo en los ejercicios donde la reacción es lenta y revisar el progreso después de varias sesiones para ajustar la dificultad.",2026-05-08T14:31:47.334Z,true

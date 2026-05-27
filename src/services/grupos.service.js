@@ -18,7 +18,7 @@ import { abandonarSesionesActivasDeClase } from './sesiones.service.js';
 
 const GROUP_FIELDS = [
   'grupos.id_grupo as id',
-  'grupos.creado_por_usuario_id',
+  'grupos.usuario_id as creado_por_usuario_id',
   'grupos.tutor_asignado_id',
   'grupos.institucion_id',
   'grupos.nombre',
@@ -239,7 +239,7 @@ export const obtener = async (id_grupo, user) => {
 export const crear = async (actor, { nombre, descripcion, predeterminado }) => {
   const [created] = await db('grupos')
     .insert({
-      creado_por_usuario_id: actor.id,
+      usuario_id: actor.id,
       tutor_asignado_id: null,
       institucion_id: actor.institucion_id,
       nombre,

@@ -11,27 +11,118 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '../..');
 const DEFAULT_CSV_PATH = path.join(ROOT_DIR, 'datos_estudiantes.csv');
+const HISTORY_CSV_PATH = path.join(
+  ROOT_DIR,
+  'datasets',
+  'recomendaciones_ia',
+  'exports',
+  'recommendation_history.csv'
+);
+const HISTORY_HEADERS = [
+  'recomendacion_id',
+  'estudiante_id',
+  'nombre_estudiante',
+  'grupo_id',
+  'nombre_grupo',
+  'habilidad_id',
+  'habilidad',
+  'precision_momento',
+  'severidad',
+  'modelo_ia',
+  'mensaje_objetivo',
+  'generado_en',
+  'activo',
+];
 
 const parseCsvRows = (csvContent) => {
-  const [headerLine, ...lines] = csvContent
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  if (!csvContent?.trim()) return [];
 
-  if (!headerLine) {
-    return [];
+  const rows = [];
+  let currentRow = [];
+  let currentValue = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < csvContent.length; index += 1) {
+    const char = csvContent[index];
+    const nextChar = csvContent[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentValue += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      currentRow.push(currentValue);
+      currentValue = '';
+      continue;
+    }
+
+    if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        index += 1;
+      }
+      currentRow.push(currentValue);
+      currentValue = '';
+
+      if (currentRow.some((value) => value !== '')) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      continue;
+    }
+
+    currentValue += char;
   }
 
-  const headers = headerLine.split(',').map((value) => value.trim());
+  if (currentValue !== '' || currentRow.length > 0) {
+    currentRow.push(currentValue);
+    if (currentRow.some((value) => value !== '')) {
+      rows.push(currentRow);
+    }
+  }
 
-  return lines.map((line) => {
-    const values = line.split(',').map((value) => value.trim());
+  if (!rows.length) return [];
 
-    return headers.reduce((row, header, index) => {
-      row[header] = values[index] ?? '';
+  const [headers, ...dataRows] = rows;
+
+  return dataRows.map((values) =>
+    headers.reduce((row, header, headerIndex) => {
+      row[String(header).trim()] = values[headerIndex] ?? '';
       return row;
-    }, {});
-  });
+    }, {})
+  );
+};
+
+const normalizeCsvCell = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value);
+};
+
+const escapeCsvValue = (value) => {
+  const normalized = normalizeCsvCell(value);
+
+  if (/[",\n\r]/.test(normalized)) {
+    return `"${normalized.replace(/"/g, '""')}"`;
+  }
+
+  return normalized;
+};
+
+const readCsvRows = async (filePath, { allowMissing = false } = {}) => {
+  try {
+    const csvContent = await fs.readFile(filePath, 'utf8');
+    return parseCsvRows(csvContent);
+  } catch (error) {
+    if (allowMissing && error.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
 };
 
 const readLocalCsvRows = async () => {
@@ -65,6 +156,78 @@ const buildCsvBuffer = (rows) => {
 
   return Buffer.from(csvContent, 'utf-8');
 };
+
+const writeCsvRows = async (filePath, rows, headers) => {
+  const csvContent = [
+    headers.join(','),
+    ...rows.map((row) => headers.map((header) => escapeCsvValue(row[header])).join(',')),
+  ].join('\n');
+
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${csvContent}\n`, 'utf8');
+};
+
+const appendRecommendationsToHistory = async (recomendaciones, sourceRows) => {
+  const historyRows = await readHistoryRows();
+  const sourceByStudent = new Map();
+
+  for (const row of sourceRows) {
+    const studentKey = String(row.estudiante_id ?? '');
+    if (studentKey && !sourceByStudent.has(studentKey)) {
+      sourceByStudent.set(studentKey, row);
+    }
+  }
+
+  const timestampBase = Date.now();
+  const newRows = recomendaciones.map((recommendation, index) => {
+    const source = sourceByStudent.get(String(recommendation.estudiante_id)) ?? {};
+
+    return {
+      recomendacion_id: `csv_${timestampBase}_${index + 1}`,
+      estudiante_id: recommendation.estudiante_id ?? '',
+      nombre_estudiante: recommendation.nombre ?? source.nombre_estudiante ?? '',
+      grupo_id: source.grupo_id ?? '',
+      nombre_grupo: source.nombre_grupo ?? '',
+      habilidad_id: source.habilidad_id ?? '',
+      habilidad: recommendation.habilidad_critica ?? source.habilidad ?? '',
+      precision_momento: recommendation.precision_actual ?? source.precision_porcentaje ?? '',
+      severidad: recommendation.severidad ?? '',
+      modelo_ia: recommendation.modelo_usado ?? '',
+      mensaje_objetivo: normalizeCsvCell(recommendation.recomendacion).replace(/\r?\n+/g, ' ').trim(),
+      generado_en: recommendation.fecha_generacion ?? new Date().toISOString(),
+      activo: 'true',
+    };
+  });
+
+  await writeCsvRows(HISTORY_CSV_PATH, [...historyRows, ...newRows], HISTORY_HEADERS);
+  return newRows.length;
+};
+
+const isValidHistoryRow = (row) =>
+  Boolean(row?.recomendacion_id) &&
+  Boolean(row?.estudiante_id) &&
+  Boolean(row?.generado_en) &&
+  Boolean(row?.mensaje_objetivo);
+
+const readHistoryRows = async () =>
+  (await readCsvRows(HISTORY_CSV_PATH, { allowMissing: true })).filter(isValidHistoryRow);
+
+const filterHistoryRows = (rows, { grupoId, estudianteId, recommendationId } = {}) =>
+  rows.filter((row) => {
+    if (recommendationId && String(row.recomendacion_id) !== String(recommendationId)) {
+      return false;
+    }
+
+    if (grupoId && String(row.grupo_id) !== String(grupoId)) {
+      return false;
+    }
+
+    if (estudianteId && String(row.estudiante_id) !== String(estudianteId)) {
+      return false;
+    }
+
+    return true;
+  });
 
 export const obtenerCatalogoCsvLocal = async (_req, res) => {
   try {
@@ -154,13 +317,80 @@ export const recomendarDesdeArchivoLocal = async (_req, res) => {
 
     const csvBuffer = buildCsvBuffer(filteredRows);
     const resultado = await generarRecomendacionesDesdeCSV(csvBuffer, 'datos_estudiantes.csv');
-    res.json(resultado);
+    const historialAgregado = await appendRecommendationsToHistory(
+      resultado?.recomendaciones ?? [],
+      filteredRows
+    );
+
+    res.json({
+      ...resultado,
+      historial_actualizado: historialAgregado,
+    });
   } catch (error) {
     if (error.code === 'ENOENT') {
       return res.status(404).json({ error: 'No se encontro el archivo datos_estudiantes.csv en la raiz del proyecto' });
     }
 
     res.status(500).json({ error: error.message });
+  }
+};
+
+export const obtenerHistorialCsv = async (req, res) => {
+  try {
+    const rows = await readHistoryRows();
+    const filteredRows = filterHistoryRows(rows, {
+      grupoId: req.query?.grupoId,
+      estudianteId: req.query?.estudianteId,
+    }).sort((left, right) => {
+      const leftTime = new Date(left.generado_en ?? 0).getTime();
+      const rightTime = new Date(right.generado_en ?? 0).getTime();
+      return rightTime - leftTime;
+    });
+
+    res.json({
+      success: true,
+      data: filteredRows,
+      total: filteredRows.length,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const borrarHistorialCsv = async (req, res) => {
+  try {
+    const { grupoId, estudianteId, recommendationId } = req.body ?? {};
+    if (!grupoId && !estudianteId && !recommendationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Debes enviar recommendationId, grupoId o estudianteId para borrar historial',
+      });
+    }
+
+    const rows = await readHistoryRows();
+    const rowsToDelete = filterHistoryRows(rows, { grupoId, estudianteId, recommendationId });
+
+    if (!rowsToDelete.length) {
+      return res.json({
+        success: true,
+        deleted: 0,
+        message: 'No habia registros de historial para borrar con ese filtro',
+      });
+    }
+
+    const remainingRows = rows.filter(
+      (row) => !rowsToDelete.some((candidate) => candidate.recomendacion_id === row.recomendacion_id)
+    );
+
+    await writeCsvRows(HISTORY_CSV_PATH, remainingRows, HISTORY_HEADERS);
+
+    res.json({
+      success: true,
+      deleted: rowsToDelete.length,
+      message: 'Historial borrado correctamente',
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

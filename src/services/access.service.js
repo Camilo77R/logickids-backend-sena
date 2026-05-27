@@ -119,7 +119,7 @@ export const assertGroupBelongsToUser = async (grupoId, user, trx = db) => {
     .where('grupos.id_grupo', grupoId)
     .select(
       'grupos.id_grupo',
-      'grupos.creado_por_usuario_id',
+      'grupos.usuario_id as creado_por_usuario_id',
       'grupos.tutor_asignado_id',
       'grupos.nombre',
       'grupos.institucion_id',
