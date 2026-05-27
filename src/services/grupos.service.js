@@ -18,7 +18,7 @@ import { abandonarSesionesActivasDeClase } from './sesiones.service.js';
 
 const GROUP_FIELDS = [
   'grupos.id_grupo as id',
-  'grupos.usuario_id as creado_por_usuario_id',
+  'grupos.creado_por_usuario_id as creado_por_usuario_id',
   'grupos.tutor_asignado_id',
   'grupos.institucion_id',
   'grupos.nombre',
