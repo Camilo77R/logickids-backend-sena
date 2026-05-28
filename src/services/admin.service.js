@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { db } from '../config/db.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import { enviarCorreoActivacionTutor } from './email.service.js';
 import {
   cerrarSesionClasePorGrupo,
   ESTADOS_SESION_CLASE,
@@ -357,6 +358,7 @@ export const cambiarEstadoUsuario = async (id_usuario, estado_nombre, actor) => 
 
   assertUserCanBeManagedByActor(objetivo, actor);
 
+  const estadoAnterior = objetivo.estado;
   const estado_id = await resolveUserStateId(estado_nombre);
 
   await db('usuarios')
@@ -365,6 +367,21 @@ export const cambiarEstadoUsuario = async (id_usuario, estado_nombre, actor) => 
       estado_id,
       actualizado_en: db.fn.now(),
     });
+
+  // Enviar correo de activación cuando un tutor inactivo pasa a activo
+  if (
+    estadoAnterior !== 'activo' &&
+    estado_nombre === 'activo' &&
+    objetivo.rol === 'tutor' &&
+    objetivo.email
+  ) {
+    enviarCorreoActivacionTutor({
+      tutorNombre: objetivo.nombre,
+      tutorEmail: objetivo.email,
+    }).catch((err) =>
+      console.error('[admin.service] Error al enviar correo de activación:', err.message)
+    );
+  }
 
   return { id: Number(id_usuario), estado: estado_nombre };
 };

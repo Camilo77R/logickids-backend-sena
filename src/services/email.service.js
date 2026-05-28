@@ -26,14 +26,6 @@ const resolveTransporter = () => {
   return transporter;
 };
 
-/**
- * Envía un correo electrónico de forma segura.
- *
- * POR QUÉ:
- * - no queremos efectos secundarios al importar el módulo
- * - el backend debe poder vivir aunque el SMTP no esté configurado
- * - las notificaciones son útiles, pero no deben tumbar el flujo principal
- */
 export const sendEmail = async ({ to, subject, html }) => {
   const mailer = resolveTransporter();
 
@@ -53,17 +45,14 @@ export const sendEmail = async ({ to, subject, html }) => {
       subject,
       html,
     });
-
+    console.log(` Correo enviado a ${to}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error(`[email.service] Error al enviar correo a ${to}:`, error);
+    console.error(` Error al enviar correo a ${to}:`, error);
     return { success: false, error: error.message };
   }
 };
 
-/**
- * Envía al tutor el resultado de su solicitud de reactivación.
- */
 export const enviarResultadoReactivacion = async ({
   tutorNombre,
   tutorEmail,
@@ -71,52 +60,210 @@ export const enviarResultadoReactivacion = async ({
   motivo = null,
 }) => {
   const esAprobado = resultado === 'aprobado';
+  const primerNombre = tutorNombre?.split(' ')[0] || 'Usuario';
+
   const subject = esAprobado
-    ? 'Tu cuenta ha sido reactivada - LogicKids'
-    : 'Tu solicitud de reactivación fue rechazada - LogicKids';
+    ? ' ¡Tu cuenta ha sido reactivada! - LogicKids'
+    : ' Solicitud de reactivación rechazada - LogicKids';
 
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>${subject}</title>
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #1796ED, #9A4FD3); padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-        .header h1 { color: white; margin: 0; }
-        .content { background: #f5f5f5; padding: 20px; border-radius: 0 0 10px 10px; }
-        .footer { margin-top: 20px; font-size: 12px; color: #999; text-align: center; }
-        .success { color: #28a745; }
-        .error { color: #dc3545; }
+        body {
+          margin: 0;
+          padding: 0;
+          font-family: 'Segoe UI', 'Poppins', sans-serif;
+          background-color: #f0f2f5;
+        }
+        .container {
+          max-width: 500px;
+          margin: 30px auto;
+          background: white;
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+          text-align: center;
+        }
+        .header {
+          background: linear-gradient(135deg, #1796ED 0%, #9A4FD3 100%);
+          padding: 25px;
+        }
+        .header h1 {
+          color: white;
+          margin: 0;
+          font-size: 28px;
+        }
+        .content {
+          padding: 30px;
+        }
+        .title {
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 20px;
+        }
+        .title-success { color: #10b981; }
+        .title-error { color: #ef4444; }
+        .motivo-box {
+          background: #fef2f2;
+          padding: 15px;
+          border-radius: 12px;
+          margin: 20px 0;
+        }
+        .footer {
+          background: #f8fafc;
+          padding: 15px;
+          font-size: 11px;
+          color: #94a3b8;
+        }
+        p {
+          margin: 15px 0;
+          line-height: 1.5;
+        }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
-          <h1>LogicKids</h1>
+          <h1> LogicKids</h1>
         </div>
         <div class="content">
-          <h2>Hola ${tutorNombre},</h2>
           ${
             esAprobado
               ? `
-                <p class="success">Tu cuenta ha sido reactivada exitosamente.</p>
-                <p>Ya puedes iniciar sesión en LogicKids y acceder a tus herramientas normalmente.</p>
+                <div class="title title-success"> ¡REACTIVACIÓN EXITOSA! </div>
+                <p>Hola ${primerNombre},</p>
+                <p>Tu cuenta ha sido <strong>reactivada exitosamente</strong>.</p>
+                <p>Ya puedes iniciar sesión.</p>
               `
               : `
-                <p class="error">Tu solicitud de reactivación fue rechazada.</p>
-                <p><strong>Motivo:</strong></p>
-                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545;">
-                  ${motivo || 'No se especificó un motivo.'}
+                <div class="title title-error"> SOLICITUD RECHAZADA</div>
+                <p>Hola ${primerNombre},</p>
+                <p>Tu solicitud de reactivación no ha sido aprobada.</p>
+                <div class="motivo-box">
+                  <strong> Motivo:</strong><br>${motivo || 'No se especificó un motivo.'}
                 </div>
+                <p>Si consideras que el motivo puede volverse a tomar en cuenta, puedes volver a enviar tu solicitud.</p>
               `
           }
         </div>
         <div class="footer">
           <p>Este es un mensaje automático de LogicKids. Por favor no responder a este correo.</p>
-          <p>© ${new Date().getFullYear()} LogicKids - Plataforma Educativa</p>
+          <p>© ${new Date().getFullYear()} LogicKids</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({ to: tutorEmail, subject, html });
+};
+
+export const enviarCorreoActivacionTutor = async ({ tutorNombre, tutorEmail }) => {
+  const primerNombre = tutorNombre?.split(' ')[0] || 'Tutor';
+
+  const subject = ' ¡Tu cuenta ha sido activada! - LogicKids';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>${subject}</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          font-family: 'Segoe UI', 'Poppins', sans-serif;
+          background-color: #f0f2f5;
+        }
+        .container {
+          max-width: 500px;
+          margin: 30px auto;
+          background: white;
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+          text-align: center;
+        }
+        .header {
+          background: linear-gradient(135deg, #1796ED 0%, #9A4FD3 100%);
+          padding: 25px;
+        }
+        .header h1 {
+          color: white;
+          margin: 0;
+          font-size: 28px;
+        }
+        .content {
+          padding: 30px;
+        }
+        .title {
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 20px;
+          color: #10b981;
+        }
+        .info-box {
+          background: #f0fdf4;
+          border: 1px solid #bbf7d0;
+          padding: 15px;
+          border-radius: 12px;
+          margin: 20px 0;
+          text-align: left;
+        }
+        .info-box ul {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+        .info-box li {
+          padding: 6px 0;
+          color: #166534;
+        }
+        .info-box li::before {
+          content: "• ";
+          font-weight: bold;
+        }
+        .footer {
+          background: #f8fafc;
+          padding: 15px;
+          font-size: 11px;
+          color: #94a3b8;
+        }
+        p {
+          margin: 15px 0;
+          line-height: 1.5;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1> LogicKids</h1>
+        </div>
+        <div class="content">
+          <div class="title"> ¡CUENTA ACTIVADA! </div>
+          <p>Hola ${primerNombre},</p>
+          <p>Tu cuenta de <strong>tutor</strong> ha sido <strong>activada</strong> por la administración de tu institución.</p>
+          <div class="info-box">
+            <p style="margin: 0 0 10px 0; font-weight: bold;">Como tutor puedes:</p>
+            <ul>
+              <li>Acceder a tus grupos y estudiantes</li>
+              <li>Gestionar sesiones de clase</li>
+              <li>Revisar el progreso de tus alumnos</li>
+            </ul>
+          </div>j 432werdsf 
+          <p>Ya puedes iniciar sesión.</p>
+        </div>
+        <div class="footer">
+          <p>Este es un mensaje automático de LogicKids. Por favor no responder a este correo.</p>
+          <p>© ${new Date().getFullYear()} LogicKids</p>
         </div>
       </div>
     </body>
