@@ -258,7 +258,7 @@ export const enviarCorreoActivacionTutor = async ({ tutorNombre, tutorEmail }) =
               <li>Gestionar sesiones de clase</li>
               <li>Revisar el progreso de tus alumnos</li>
             </ul>
-          </div>j 432werdsf 
+          </div>
           <p>Ya puedes iniciar sesión.</p>
         </div>
         <div class="footer">
