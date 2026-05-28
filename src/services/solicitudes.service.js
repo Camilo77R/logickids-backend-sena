@@ -1,6 +1,6 @@
 import { db } from '../config/db.js';
 import { AppError } from '../middlewares/errorHandler.js';
-import { enviarResultadoReactivacion } from './email.service.js';
+import { enviarCorreoActivacionTutor, enviarResultadoReactivacion } from './email.service.js';
 
 const SOLICITUD_FIELDS = [
   'sr.id_solicitud as id',
@@ -198,6 +198,13 @@ export const aprobarSolicitud = async (id_solicitud, user) => {
     tutorEmail: solicitud.correo_contacto,
     resultado: 'aprobado',
   });
+
+  enviarCorreoActivacionTutor({
+    tutorNombre: solicitud.tutor_nombre,
+    tutorEmail: solicitud.correo_contacto,
+  }).catch((err) =>
+    console.error('[solicitudes.service] Error al enviar correo de activación:', err.message)
+  );
 
   return {
     solicitud_id: id_solicitud,

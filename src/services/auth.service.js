@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../config/db.js';
 import { env } from '../config/env.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import { enviarCorreoActivacionTutor } from './email.service.js';
 
 const USER_FIELDS = [
   'usuarios.id_usuario',
@@ -89,6 +90,13 @@ export const registrar = async ({ nombre, email, contrasena, institucion_id }) =
   const [{ id_usuario }] = await db('usuarios')
     .insert({ nombre, email, contrasena_hash, rol_id, institucion_id, estado_id })
     .returning('id_usuario');
+
+  enviarCorreoActivacionTutor({
+    tutorNombre: nombre,
+    tutorEmail: email,
+  }).catch((err) =>
+    console.error('[auth.service] Error al enviar correo de activación al registrar:', err.message)
+  );
 
   return { id_usuario, nombre, email, rol: 'tutor', estado: 'inactivo' };
 };

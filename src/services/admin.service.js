@@ -418,7 +418,7 @@ export const crearTutorInstitucional = async (
     throw new AppError('El email ya está registrado', 409);
   }
 
-  return db.transaction((trx) =>
+  const usuario = await db.transaction((trx) =>
     createProvisionedInstitutionUser(
       {
         nombre,
@@ -429,6 +429,15 @@ export const crearTutorInstitucional = async (
       trx
     )
   );
+
+  enviarCorreoActivacionTutor({
+    tutorNombre: usuario.nombre,
+    tutorEmail: usuario.email,
+  }).catch((err) =>
+    console.error('[admin.service] Error al enviar correo de activación al tutor creado:', err.message)
+  );
+
+  return usuario;
 };
 
 const buildInstitucionesQuery = () =>
