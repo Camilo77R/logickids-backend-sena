@@ -8,6 +8,7 @@ import {
   obtenerSesionClaseActivaPorGrupo,
 } from './sesionesClase.service.js';
 import { abandonarSesionesActivasDeClase } from './sesiones.service.js';
+import { enviarCorreoActivacionTutor } from './email.service.js';
 
 const WEB_USER_FIELDS = [
   'usuarios.id_usuario as id',

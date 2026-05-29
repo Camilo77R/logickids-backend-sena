@@ -62,6 +62,55 @@ export const sendEmail = async ({ to, subject, html }) => {
 };
 
 /**
+ * Envía al tutor un correo de confirmación tras registrarse,
+ * informándole que su cuenta está pendiente de activación por un administrador.
+ */
+export const enviarCorreoActivacionTutor = async ({ tutorNombre, tutorEmail }) => {
+  const subject = 'Cuenta creada exitosamente - LogicKids';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <title>${subject}</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #1796ED, #9A4FD3); padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+        .header h1 { color: white; margin: 0; }
+        .content { background: #f5f5f5; padding: 20px; border-radius: 0 0 10px 10px; }
+        .footer { margin-top: 20px; font-size: 12px; color: #999; text-align: center; }
+        .info { background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #1796ED; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>LogicKids</h1>
+        </div>
+        <div class="content">
+          <h2>¡Hola ${tutorNombre}!</h2>
+          <p>Tu cuenta ha sido creada exitosamente en la plataforma LogicKids.</p>
+          <div class="info">
+            <p><strong>Estado de tu cuenta:</strong> Pendiente de activación</p>
+            <p>Un administrador de tu institución debe activar tu cuenta antes de que puedas iniciar sesión. Esto suele ocurrir en un plazo de 24 a 48 horas hábiles.</p>
+          </div>
+          <p>Una vez activada, podrás acceder a todas las herramientas pedagógicas de LogicKids.</p>
+        </div>
+        <div class="footer">
+          <p>Este es un mensaje automático de LogicKids. Por favor no responder a este correo.</p>
+          <p>© ${new Date().getFullYear()} LogicKids - Plataforma Educativa</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({ to: tutorEmail, subject, html });
+};
+
+/**
  * Envía al tutor el resultado de su solicitud de reactivación.
  */
 export const enviarResultadoReactivacion = async ({
