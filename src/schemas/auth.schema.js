@@ -40,6 +40,15 @@ export const loginSchema = z.object({
     .min(1, 'La contraseña es obligatoria'),
 });
 
+/** POST /api/auth/login-qr */
+export const loginQrSchema = z.object({
+  qr_token: z
+    .string({ required_error: 'El QR token es obligatorio' })
+    .trim()
+    .min(6, 'El QR token debe tener al menos 6 caracteres')
+    .max(120, 'El QR token no puede superar 120 caracteres'),
+});
+
 /** PUT /api/auth/perfil */
 export const actualizarPerfilSchema = z
   .object({

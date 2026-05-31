@@ -5,6 +5,7 @@ import { validate } from '../middlewares/validate.js';
 import {
   registroSchema,
   loginSchema,
+  loginQrSchema,
   actualizarPerfilSchema,
   cambiarContrasenaSchema,
 } from '../schemas/auth.schema.js';
@@ -16,6 +17,7 @@ router.get('/instituciones', ctrl.instituciones);
 
 router.post('/registro', validate(registroSchema), ctrl.registro);
 router.post('/login',    validate(loginSchema),    ctrl.login);
+router.post('/login-qr', validate(loginQrSchema),  ctrl.loginQr);
 
 router.get('/perfil',  requireAuth,                                         ctrl.perfil);
 router.put('/perfil',  requireAuth, validate(actualizarPerfilSchema),       ctrl.actualizarPerfil);

@@ -53,6 +53,30 @@ describe('POST /api/auth/login', () => {
 
 });
 
+describe('POST /api/auth/login-qr', () => {
+
+  it('devuelve token de estudiante al hacer login con QR valido', async () => {
+    const res = await request(app)
+      .post('/api/auth/login-qr')
+      .send({ qr_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test_qr_token' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.token).toMatch(/^eyJ/);
+    expect(res.body.data.estudiante.nombre).toBe('Ana García');
+  });
+
+  it('rechaza un QR invalido', async () => {
+    const res = await request(app)
+      .post('/api/auth/login-qr')
+      .send({ qr_token: 'QR-NO-EXISTE' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
+
+});
+
 describe('GET /api/auth/perfil', () => {
 
   it('✅ devuelve el perfil del superadmin autenticado', async () => {

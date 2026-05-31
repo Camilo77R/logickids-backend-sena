@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../config/db.js';
 import { env } from '../config/env.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import { loginEstudiante } from './estudiantes.service.js';
 
 const USER_FIELDS = [
   'usuarios.id_usuario',
@@ -130,6 +131,8 @@ export const login = async ({ email, contrasena }) => {
 
   return { token, usuario: userData };
 };
+
+export const loginQr = (qr_token) => loginEstudiante(qr_token);
 
 export const obtenerPerfil = (id) =>
   baseQuery().where('usuarios.id_usuario', id).select(USER_FIELDS).first();

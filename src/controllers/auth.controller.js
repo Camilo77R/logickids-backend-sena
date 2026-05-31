@@ -35,6 +35,13 @@ export const login = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const loginQr = async (req, res, next) => {
+  try {
+    const data = await svc.loginQr(req.body.qr_token);
+    ok(res, data, 'Sesión de estudiante iniciada correctamente');
+  } catch (e) { next(e); }
+};
+
 export const perfil = async (req, res, next) => {
   try {
     const data = await svc.obtenerPerfil(req.user.id);
