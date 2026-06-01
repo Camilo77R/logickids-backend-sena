@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '../config/db.js';
 import { env } from '../config/env.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import { notificarRegistroTutor } from './email.service.js';
 
 const USER_FIELDS = [
   'usuarios.id_usuario',
@@ -89,6 +90,14 @@ export const registrar = async ({ nombre, email, contrasena, institucion_id }) =
   const [{ id_usuario }] = await db('usuarios')
     .insert({ nombre, email, contrasena_hash, rol_id, institucion_id, estado_id })
     .returning('id_usuario');
+
+  // Notificar al tutor que su cuenta fue creada y queda inactiva hasta activación manual.
+  // El envío es no-bloqueante: si falla, no interrumpe el flujo de registro.
+  try {
+    await notificarRegistroTutor({ tutorNombre: nombre, tutorEmail: email });
+  } catch (emailError) {
+    console.error('[auth.service] Error al enviar correo de registro al tutor:', emailError);
+  }
 
   return { id_usuario, nombre, email, rol: 'tutor', estado: 'inactivo' };
 };

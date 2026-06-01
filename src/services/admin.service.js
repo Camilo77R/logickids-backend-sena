@@ -8,6 +8,7 @@ import {
   obtenerSesionClaseActivaPorGrupo,
 } from './sesionesClase.service.js';
 import { abandonarSesionesActivasDeClase } from './sesiones.service.js';
+import { notificarActivacionTutor, notificarRegistroTutor } from './email.service.js';
 
 const WEB_USER_FIELDS = [
   'usuarios.id_usuario as id',
@@ -366,6 +367,16 @@ export const cambiarEstadoUsuario = async (id_usuario, estado_nombre, actor) => 
       actualizado_en: db.fn.now(),
     });
 
+  // Notificar al tutor cuando el admin activa su cuenta manualmente.
+  // El envío es no-bloqueante: si falla, no interrumpe el flujo de activación.
+  if (estado_nombre === 'activo' && objetivo.rol === 'tutor') {
+    try {
+      await notificarActivacionTutor({ tutorNombre: objetivo.nombre, tutorEmail: objetivo.email });
+    } catch (emailError) {
+      console.error('[admin.service] Error al enviar correo de activación al tutor:', emailError);
+    }
+  }
+
   return { id: Number(id_usuario), estado: estado_nombre };
 };
 
@@ -418,7 +429,7 @@ export const crearTutorInstitucional = async (
     throw new AppError('El email ya está registrado', 409);
   }
 
-  return db.transaction((trx) =>
+  const tutor = await db.transaction((trx) =>
     createProvisionedInstitutionUser(
       {
         nombre,
@@ -429,6 +440,15 @@ export const crearTutorInstitucional = async (
       trx
     )
   );
+
+  // 🔧 CORREGIDO: El admin crea al tutor, queda ACTIVO → enviar email de ACTIVACIÓN
+  try {
+    await notificarActivacionTutor({ tutorNombre: nombre, tutorEmail: email });
+  } catch (emailError) {
+    console.error('[admin.service] Error al enviar correo de activación al tutor:', emailError);
+  }
+
+  return tutor;
 };
 
 const buildInstitucionesQuery = () =>
