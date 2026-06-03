@@ -28,11 +28,6 @@ const resolveTransporter = () => {
 
 /**
  * Envía un correo electrónico de forma segura.
- *
- * POR QUÉ:
- * - no queremos efectos secundarios al importar el módulo
- * - el backend debe poder vivir aunque el SMTP no esté configurado
- * - las notificaciones son útiles, pero no deben tumbar el flujo principal
  */
 export const sendEmail = async ({ to, subject, html }) => {
   const mailer = resolveTransporter();
@@ -59,6 +54,119 @@ export const sendEmail = async ({ to, subject, html }) => {
     console.error(`[email.service] Error al enviar correo a ${to}:`, error);
     return { success: false, error: error.message };
   }
+};
+
+/**
+ * Notifica al tutor que su cuenta fue creada pero queda inactiva
+ * hasta que el administrador la active manualmente.
+ */
+export const notificarRegistroTutor = async ({ tutorNombre, tutorEmail }) => {
+  const subject = 'Tu cuenta de LogicKids ha sido creada';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <title>${subject}</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #1796ED, #9A4FD3); padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+        .header h1 { color: white; margin: 0; }
+        .content { background: #f5f5f5; padding: 20px; border-radius: 0 0 10px 10px; }
+        .footer { margin-top: 20px; font-size: 12px; color: #999; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>LogicKids</h1>
+        </div>
+        <div class="content">
+          <h2>Hola ${tutorNombre},</h2>
+          <p>Tu cuenta ha sido creada exitosamente.</p>
+          <p>Quedará <strong>inactiva</strong> hasta que el administrador de tu institución la active. Recibirás un correo cuando esté lista para usar.</p>
+        </div>
+        <div class="footer">
+          <p>Este es un mensaje automático de LogicKids. Por favor no responder a este correo.</p>
+          <p>© ${new Date().getFullYear()} LogicKids - Plataforma Educativa</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({ to: tutorEmail, subject, html });
+};
+
+/**
+ * Notifica al tutor que su cuenta ha sido activada manualmente por el admin
+ * El correo incluye las funciones del tutor (sin botón de inicio de sesión)
+ */
+export const notificarActivacionTutor = async ({ tutorNombre, tutorEmail }) => {
+  const subject = '¡CUENTA ACTIVADA!';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <title>${subject}</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #1796ED, #9A4FD3); padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0; }
+        .header h1 { color: white; margin: 0; font-size: 28px; }
+        .header h2 { color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 20px; }
+        .content { background: #f5f5f5; padding: 30px 25px; border-radius: 0 0 10px 10px; }
+        .greeting { font-size: 18px; color: #333; margin-bottom: 20px; }
+        .message { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .features { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .features h3 { color: #1796ED; margin-top: 0; margin-bottom: 15px; }
+        .features ul { margin: 0; padding-left: 20px; }
+        .features li { margin: 10px 0; color: #555; }
+        .footer { margin-top: 25px; font-size: 12px; color: #999; text-align: center; }
+        hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>LogicKids</h1>
+          <h2>${subject}</h2>
+        </div>
+        <div class="content">
+          <div class="greeting">
+            <strong>Hola ${tutorNombre},</strong>
+          </div>
+          
+          <div class="message">
+            <p>Tu cuenta de tutor ha sido <strong>activada</strong> por la administración de tu institución.</p>
+          </div>
+          
+          <div class="features">
+            <h3>Como tutor puedes:</h3>
+            <ul>
+              <li>Acceder a tus grupos y estudiantes</li>
+              <li>Gestionar sesiones de clase</li>
+              <li>Revisar el progreso de tus alumnos</li>
+            </ul>
+          </div>
+          
+          <p>Ya puedes iniciar sesión.</p>
+        </div>
+        <div class="footer">
+          <hr>
+          <p>Este es un mensaje automático de LogicKids. Por favor no responder a este correo.</p>
+          <p>© ${new Date().getFullYear()} LogicKids</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({ to: tutorEmail, subject, html });
 };
 
 /**
