@@ -36,6 +36,7 @@ Además se enriquecieron las partidas reales:
 - `sesiones_juego.configuracion_aplicada`
 - `sesiones_juego.fuente_adaptacion`
 - `sesiones_juego.modelo_ia_id`
+- `sesiones_juego.estrellas_obtenidas`
 
 Y los eventos ahora permiten detalles específicos del juego:
 
@@ -59,6 +60,7 @@ La plataforma base ya cubre lo común:
 - quién participa
 - qué jugó cada estudiante
 - con qué configuración exacta jugó
+- cuántas estrellas oficiales obtuvo en ese nivel
 - qué eventos ocurrieron
 
 Solo necesitaríamos una tabla específica por juego si ese juego tuviera estado persistente propio y complejo, por ejemplo:

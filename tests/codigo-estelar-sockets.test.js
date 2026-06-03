@@ -296,6 +296,7 @@ describe('🔌 Sockets — Codigo Estelar', () => {
           'sesiones_juego.aciertos',
           'sesiones_juego.errores',
           'sesiones_juego.combo_maximo',
+          'sesiones_juego.estrellas_obtenidas',
           'estados_sesion.nombre as estado'
         )
         .first();
@@ -305,6 +306,7 @@ describe('🔌 Sockets — Codigo Estelar', () => {
         aciertos: 7,
         errores: 0,
         combo_maximo: 7,
+        estrellas_obtenidas: 3,
         estado: 'completado',
       });
 
@@ -320,6 +322,7 @@ describe('🔌 Sockets — Codigo Estelar', () => {
         aciertos: 7,
         errores: 0,
         combo_maximo: 7,
+        estrellas_obtenidas: 3,
       });
     } finally {
       await closeSocket(socket);
