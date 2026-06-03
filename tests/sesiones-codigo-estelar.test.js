@@ -322,6 +322,7 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
       aciertos: 2,
       errores: 1,
       combo_maximo: 2,
+      estrellas_obtenidas: 1,
     });
 
     const stats = await db('estadisticas_habilidad')
@@ -388,6 +389,7 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
       aciertos: 1,
       errores: 0,
       combo_maximo: 1,
+      estrellas_obtenidas: 3,
     });
 
     const stats = await db('estadisticas_habilidad')
