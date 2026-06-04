@@ -321,6 +321,7 @@ CREATE TABLE IF NOT EXISTS public.sesiones_juego
     aciertos integer NOT NULL DEFAULT 0,
     errores integer NOT NULL DEFAULT 0,
     combo_maximo integer NOT NULL DEFAULT 0,
+    estrellas_obtenidas integer NOT NULL DEFAULT 0,
     estado_id integer NOT NULL DEFAULT 1,
     sesion_clase_id integer,
     orden_en_ruta integer NOT NULL DEFAULT 1,
@@ -332,6 +333,7 @@ CREATE TABLE IF NOT EXISTS public.sesiones_juego
     creado_en timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT sesiones_juego_pkey PRIMARY KEY (id_sesion_juego),
     CONSTRAINT ck_sesiones_juego_orden_en_ruta CHECK (orden_en_ruta > 0),
+    CONSTRAINT ck_sesiones_juego_estrellas_obtenidas CHECK (estrellas_obtenidas >= 0 AND estrellas_obtenidas <= 3),
     CONSTRAINT ck_sesiones_juego_fuente_adaptacion CHECK (fuente_adaptacion::text = ANY (ARRAY['base'::character varying, 'reglas'::character varying, 'ia'::character varying]::text[]))
 );
 

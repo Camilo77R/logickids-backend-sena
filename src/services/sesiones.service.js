@@ -28,6 +28,43 @@ const resolveCatalogId = async (table, pkColumn, nombre, executor = db) => {
   return r[pkColumn];
 };
 
+const ESTRELLAS_MINIMAS = 0;
+const ESTRELLAS_MAXIMAS = 3;
+
+const clampStars = (stars) =>
+  Math.max(ESTRELLAS_MINIMAS, Math.min(ESTRELLAS_MAXIMAS, Number(stars) || 0));
+
+/**
+ * Calcula estrellas oficiales para cualquier minijuego.
+ *
+ * PARETO:
+ * - la DB guarda intentos y resultado oficial
+ * - el backend traduce eso a una recompensa simple 0..3
+ * - la UI solo muestra esa recompensa, no la inventa
+ */
+const calcularEstrellasSesion = ({ aciertos = 0, errores = 0, estado = 'completado' }) => {
+  if (estado !== 'completado') {
+    return ESTRELLAS_MINIMAS;
+  }
+
+  const totalIntentos = aciertos + errores;
+  if (totalIntentos <= 0 || aciertos <= 0) {
+    return ESTRELLAS_MINIMAS;
+  }
+
+  const precision = aciertos / totalIntentos;
+
+  if (precision >= 0.9) {
+    return ESTRELLAS_MAXIMAS;
+  }
+
+  if (precision >= 0.7) {
+    return 2;
+  }
+
+  return 1;
+};
+
 const SOCKET_EVENTS_BY_SLUG = Object.freeze({
   [CODIGO_ESTELAR_SLUG]: CODIGO_ESTELAR_SOCKET_EVENTS,
 });
@@ -295,6 +332,10 @@ const finalizarSesionInterna = async (
 
   const estado_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', estado, executor);
   const officialSummary = await buildOfficialSessionSummary(sesion_id, executor);
+  const estrellas_obtenidas = calcularEstrellasSesion({
+    ...officialSummary,
+    estado,
+  });
 
   const updateData = {
     estado_id,
@@ -303,6 +344,7 @@ const finalizarSesionInterna = async (
     aciertos: officialSummary.aciertos,
     errores: officialSummary.errores,
     combo_maximo: officialSummary.combo_maximo,
+    estrellas_obtenidas,
   };
 
   await executor('sesiones_juego').where({ id_sesion_juego: sesion_id }).update(updateData);
@@ -339,7 +381,10 @@ const finalizarSesionInterna = async (
   const sesion = await executor('sesiones_juego').where({ id_sesion_juego: sesion_id }).first();
   return {
     ...sesion,
-    resumen_oficial: officialSummary,
+    resumen_oficial: {
+      ...officialSummary,
+      estrellas_obtenidas,
+    },
     logros_desbloqueados,
     progreso_ruta,
     finalizacion_idempotente: false,
@@ -410,6 +455,7 @@ const buildPersistedOfficialSummary = (sesion) => ({
   aciertos: Number(sesion.aciertos ?? 0),
   errores: Number(sesion.errores ?? 0),
   combo_maximo: Number(sesion.combo_maximo ?? 0),
+  estrellas_obtenidas: clampStars(sesion.estrellas_obtenidas),
 });
 
 /**
@@ -633,6 +679,7 @@ export const listarHistorialEstudiante = (estudiante_id) =>
       'sesiones_juego.aciertos',
       'sesiones_juego.errores',
       'sesiones_juego.combo_maximo',
+      'sesiones_juego.estrellas_obtenidas',
       'sesiones_juego.sesion_clase_id',
       'sesiones_juego.orden_en_ruta',
       'sc.modo as sesion_modo',
