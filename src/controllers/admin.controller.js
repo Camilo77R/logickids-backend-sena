@@ -43,6 +43,9 @@ export const listarInstituciones = async (req, res, next) => {
   try {
     const data = await adminService.listarInstituciones({
       estado: req.query.estado ?? 'todas',
+      search: req.query.search?.trim(),
+      sort_by: req.query.sort_by,
+      sort_dir: req.query.sort_dir,
     });
     ok(res, data, 'Instituciones obtenidas correctamente');
   } catch (error) { next(error); }

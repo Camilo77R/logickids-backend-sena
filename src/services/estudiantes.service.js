@@ -244,7 +244,14 @@ export const listarTodos = async (user, grupo_id) => {
     )
   )
     .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
-    .select([...STUDENT_FIELDS, 'estados_estudiante.nombre as estado', 'grupos.activo as grupo_activo'])
+    .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
+    .select([
+      ...STUDENT_FIELDS,
+      'grupos.nombre as grupo_nombre',
+      'grupos.activo as grupo_activo',
+      'instituciones.nombre as institucion',
+      'instituciones.ciudad as institucion_ciudad',
+    ])
     .orderBy('estudiantes.nombre');
 
   query = applyStudentOwnershipScope(query, user);
