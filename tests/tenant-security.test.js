@@ -23,6 +23,24 @@ describe('🛡️ Seguridad — Solo superadmin gestiona instituciones', () => {
     expect(Array.isArray(res.body.data)).toBe(true);
   });
 
+  it('✅ superadmin puede buscar instituciones por texto', async () => {
+    const token = await getSuperadminToken();
+
+    const res = await request(app)
+      .get('/api/admin/instituciones?search=colegio')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(res.body.data.every((inst) =>
+      /colegio/i.test(inst.nombre) ||
+      /colegio/i.test(inst.institucion_ciudad || inst.ciudad) ||
+      /colegio/i.test(inst.direccion || '') ||
+      /colegio/i.test(inst.telefono || '')
+    )).toBe(true);
+  });
+
   it('❌ un usuario sin token NO puede listar instituciones', async () => {
     const res = await request(app).get('/api/admin/instituciones');
     expect(res.status).toBe(401);
