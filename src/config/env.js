@@ -19,6 +19,10 @@ const schema = z.object({
   EMAIL_USER: z.string().optional(),
   EMAIL_PASS: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
+  EMAIL_PUBLIC_BASE_URL: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().url().optional(),
+  ),
   GEMINI_API_KEY: z.string().optional(),
 });
 
