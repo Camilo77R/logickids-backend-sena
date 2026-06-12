@@ -2,6 +2,10 @@ import request from 'supertest';
 import app from '../../src/app.js';
 import { db } from '../../src/config/db.js';
 import { getSuperadminToken, loginAs } from './auth.helper.js';
+import {
+  buildTestInstitutionName,
+  registerTestInstitution,
+} from './testFixtures.helper.js';
 
 export const buildCodigoEstelarSuffix = (label = 'codigo-estelar') =>
   `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -53,7 +57,7 @@ export const provisionPlayableStudent = async ({
     .post('/api/admin/instituciones')
     .set(authHeader(superToken))
     .send({
-      nombre: `Inst ${suffix}`,
+      nombre: buildTestInstitutionName(`Inst ${suffix}`),
       ciudad: 'Bogota',
       direccion: 'Calle 123',
     });
@@ -63,6 +67,7 @@ export const provisionPlayableStudent = async ({
   }
 
   const institutionId = createInstitutionRes.body.data.institucion.id;
+  registerTestInstitution(institutionId);
   const { email: adminEmail, contrasena_temporal: adminPassword } = createInstitutionRes.body.data.admin;
   const adminToken = await loginAs(adminEmail, adminPassword);
 

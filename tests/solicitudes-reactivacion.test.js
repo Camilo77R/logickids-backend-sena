@@ -3,6 +3,10 @@ import request from 'supertest';
 import app from '../src/app.js';
 import { db } from '../src/config/db.js';
 import { getSuperadminToken, loginAs } from './helpers/auth.helper.js';
+import {
+  buildTestInstitutionName,
+  registerTestInstitution,
+} from './helpers/testFixtures.helper.js';
 
 const authHeader = (token) => ({ Authorization: `Bearer ${token}` });
 
@@ -46,7 +50,7 @@ const provisionSuspendedTutor = async () => {
     .post('/api/admin/instituciones')
     .set(authHeader(superToken))
     .send({
-      nombre: `Inst ${suffix}`,
+      nombre: buildTestInstitutionName(`Inst ${suffix}`),
       ciudad: 'Bogota',
       direccion: 'Calle 123',
     });
@@ -54,6 +58,7 @@ const provisionSuspendedTutor = async () => {
   expect(createInstitutionRes.status).toBe(201);
 
   const institutionId = createInstitutionRes.body.data.institucion.id;
+  registerTestInstitution(institutionId);
   const adminEmail = createInstitutionRes.body.data.admin.email;
   const adminPassword = createInstitutionRes.body.data.admin.contrasena_temporal;
   const adminToken = await loginAs(adminEmail, adminPassword);

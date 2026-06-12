@@ -9,6 +9,10 @@ import {
   resolveCodigoEstelarId,
 } from './helpers/codigoEstelar.helper.js';
 import { getSuperadminToken, loginAs } from './helpers/auth.helper.js';
+import {
+  buildTestInstitutionName,
+  registerTestInstitution,
+} from './helpers/testFixtures.helper.js';
 
 const createInstitutionWithPrincipalAdmin = async (suffix) => {
   const superToken = await getSuperadminToken();
@@ -17,7 +21,7 @@ const createInstitutionWithPrincipalAdmin = async (suffix) => {
     .post('/api/admin/instituciones')
     .set(authHeader(superToken))
     .send({
-      nombre: `Institucion ${suffix}`,
+      nombre: buildTestInstitutionName(`Institucion ${suffix}`),
       ciudad: 'Bogota',
       direccion: 'Calle 99',
     });
@@ -25,6 +29,7 @@ const createInstitutionWithPrincipalAdmin = async (suffix) => {
   expect(createInstitutionRes.status).toBe(201);
 
   const institutionId = createInstitutionRes.body.data.institucion.id;
+  registerTestInstitution(institutionId);
   const { email, contrasena_temporal } = createInstitutionRes.body.data.admin;
   const adminToken = await loginAs(email, contrasena_temporal);
 

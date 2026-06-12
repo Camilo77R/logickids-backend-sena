@@ -9,6 +9,10 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import app from '../src/app.js';
 import { getSuperadminToken } from './helpers/auth.helper.js';
+import {
+  buildTestInstitutionName,
+  registerTestInstitution,
+} from './helpers/testFixtures.helper.js';
 
 describe('🛡️ Seguridad — Solo superadmin gestiona instituciones', () => {
 
@@ -54,9 +58,10 @@ describe('🛡️ Seguridad — Solo superadmin gestiona instituciones', () => {
     const instRes = await request(app)
       .post('/api/admin/instituciones')
       .set('Authorization', `Bearer ${superToken}`)
-      .send({ nombre: `Test Tenant ${Date.now()}`, ciudad: 'Bogotá' });
+      .send({ nombre: buildTestInstitutionName(`Test Tenant ${Date.now()}`), ciudad: 'Bogotá' });
 
     expect(instRes.status).toBe(201);
+    registerTestInstitution(instRes.body.data.institucion.id);
 
     const { admin } = instRes.body.data;
 
