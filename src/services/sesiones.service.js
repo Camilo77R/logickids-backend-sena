@@ -20,6 +20,10 @@ import {
   buildCaminoArGameConfig,
   CAMINO_AR_SLUG,
 } from '../games/caminoAr/caminoAr.config.js';
+import {
+  buildMercadoInteligenteGameConfig,
+  MERCADO_INTELIGENTE_SLUG,
+} from '../games/mercadoInteligente/mercadoInteligente.config.js';
 
 /** Resuelve el ID de una tabla catálogo por su nombre usando la PK correcta */
 const resolveCatalogId = async (table, pkColumn, nombre, executor = db) => {
@@ -234,6 +238,8 @@ const buildGameConfig = (grupoId, minijuego, dificultad, configuracionBase = {})
       };
     case CAMINO_AR_SLUG:
       return buildCaminoArGameConfig(dificultad, configuracionNormalizada);
+    case MERCADO_INTELIGENTE_SLUG:
+      return buildMercadoInteligenteGameConfig(dificultad, configuracionNormalizada);
     default:
       return { ...configuracionNormalizada, dificultad };
   }
