@@ -24,6 +24,7 @@ const schema = z.object({
     z.string().url().optional(),
   ),
   GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL_NAME: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
