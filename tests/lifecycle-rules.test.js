@@ -12,9 +12,13 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import app from '../src/app.js';
 import { getSuperadminToken, loginAs } from './helpers/auth.helper.js';
+import {
+  buildTestInstitutionName,
+  registerTestInstitution,
+} from './helpers/testFixtures.helper.js';
 
 const buildInstitutionPayload = (suffix) => ({
-  nombre: `Tenant Lifecycle ${suffix}`,
+  nombre: buildTestInstitutionName(`Tenant Lifecycle ${suffix}`),
   ciudad: 'Bogotá',
   direccion: 'Calle de pruebas 123',
 });
@@ -31,6 +35,7 @@ describe('🔄 Ciclo de vida — instituciones activas e inactivas', () => {
 
     expect(createRes.status).toBe(201);
     const institutionId = createRes.body.data.institucion.id;
+    registerTestInstitution(institutionId);
 
     const publicBefore = await request(app).get('/api/auth/instituciones');
     expect(publicBefore.status).toBe(200);
@@ -92,6 +97,7 @@ describe('🔄 Ciclo de vida — instituciones activas e inactivas', () => {
     expect(createRes.status).toBe(201);
 
     const institutionId = createRes.body.data.institucion.id;
+    registerTestInstitution(institutionId);
     const { email, contrasena_temporal } = createRes.body.data.admin;
 
     const adminToken = await loginAs(email, contrasena_temporal);

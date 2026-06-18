@@ -11,6 +11,7 @@
     "provision:codigo-estelar:6": "node scripts/provision-codigo-estelar-demo.mjs --students=6",
     "dataset:export:recomendaciones": "node scripts/export-recommendation-dataset.mjs",
     "test": "vitest run",
+    "test:cleanup:institutions": "node scripts/cleanup-test-institutions.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
