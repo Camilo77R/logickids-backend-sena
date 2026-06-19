@@ -7,6 +7,8 @@
 import request from 'supertest';
 import app from '../../src/app.js';
 
+let cachedSuperadminTokenPromise = null;
+
 /**
  * Hace login y devuelve el token JWT.
  * @param {string} email
@@ -26,5 +28,10 @@ export const loginAs = async (email, contrasena) => {
 };
 
 /** Token del superadmin (disponible en el seed) */
-export const getSuperadminToken = () =>
-  loginAs('superadmin@logickids.dev', 'SuperAdmin2025!');
+export const getSuperadminToken = () => {
+  if (!cachedSuperadminTokenPromise) {
+    cachedSuperadminTokenPromise = loginAs('superadmin@logickids.dev', 'SuperAdmin2025!');
+  }
+
+  return cachedSuperadminTokenPromise;
+};

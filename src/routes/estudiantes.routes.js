@@ -14,13 +14,14 @@ const router = Router();
 // Rutas públicas (sin JWT de tutor)
 router.post('/login',         validate(loginEstudianteSchema),   ctrl.loginEstudiante);
 router.get('/mi-perfil',      requireEstudiante,                 ctrl.miPerfil);
+router.get('/mi-ranking',     requireEstudiante,                 ctrl.miRanking);
 
 // Rutas protegidas
 router.use(requireAuth);
 
-router.get('/', requireRole('admin', 'tutor'), ctrl.listar);
-router.get('/all', requireRole('admin', 'tutor'), ctrl.listarTodos);
-router.get('/:id', requireRole('admin', 'tutor'), ctrl.obtener);
+router.get('/', requireRole('admin', 'tutor', 'superadmin'), ctrl.listar);
+router.get('/all', requireRole('admin', 'tutor', 'superadmin'), ctrl.listarTodos);
+router.get('/:id', requireRole('admin', 'tutor', 'superadmin'), ctrl.obtener);
 router.post('/', requireRole('admin'), validate(crearEstudianteSchema), ctrl.crear);
 router.put('/:id', requireRole('admin'), validate(actualizarEstudianteSchema), ctrl.actualizar);
 router.patch('/:id/grupo', requireRole('admin'), validate(cambiarGrupoEstudianteSchema), ctrl.cambiarGrupo);

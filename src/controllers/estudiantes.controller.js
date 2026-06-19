@@ -1,4 +1,5 @@
 import * as svc from '../services/estudiantes.service.js';
+import * as rankingSvc from '../services/ranking.service.js';
 import { ok, created, noContent } from '../utils/response.js';
 
 export const loginEstudiante = async (req, res, next) => {
@@ -12,6 +13,13 @@ export const miPerfil = async (req, res, next) => {
   try {
     const data = await svc.obtenerPerfilInfantil(req.estudiante.id);
     ok(res, data, 'Perfil infantil obtenido correctamente');
+  } catch (e) { next(e); }
+};
+
+export const miRanking = async (req, res, next) => {
+  try {
+    const data = await rankingSvc.obtenerMiRanking(req.estudiante.id);
+    ok(res, data, 'Ranking del estudiante obtenido correctamente');
   } catch (e) { next(e); }
 };
 

@@ -104,11 +104,11 @@ const createProvisionedInstitutionUser = async (
 ) => {
   const contrasena_temporal = buildTemporaryPassword();
 
-  const [rol_id, estado_id, contrasena_hash] = await Promise.all([
-    resolveRoleId(rol, trx),
-    resolveUserStateId(estado, trx),
-    bcrypt.hash(contrasena_temporal, 10),
-  ]);
+  // Un trx comparte conexion; serializamos lecturas del catalogo para evitar
+  // queries concurrentes sobre el mismo cliente.
+  const rol_id = await resolveRoleId(rol, trx);
+  const estado_id = await resolveUserStateId(estado, trx);
+  const contrasena_hash = await bcrypt.hash(contrasena_temporal, 10);
 
   const [usuario] = await trx('usuarios')
     .insert({
@@ -471,8 +471,38 @@ const buildInstitucionesQuery = () =>
       )
     );
 
-export const listarInstituciones = ({ estado = 'todas' } = {}) => {
+const validateInstitutionSortParams = ({ sort_by, sort_dir }) => {
+  const allowedSortColumns = new Set([
+    'nombre',
+    'ciudad',
+    'activo',
+    'admins_totales',
+    'tutores_activos',
+    'creado_en',
+  ]);
+  const allowedSortDirections = new Set(['asc', 'desc']);
+
+  if (sort_by && !allowedSortColumns.has(sort_by)) {
+    throw new AppError('Campo de orden no válido. Use: nombre | ciudad | activo | admins_totales | tutores_activos | creado_en', 400);
+  }
+
+  if (sort_dir && !allowedSortDirections.has(sort_dir.toLowerCase())) {
+    throw new AppError('Dirección de orden no válida. Use: asc | desc', 400);
+  }
+};
+
+export const listarInstituciones = ({ estado = 'todas', search, sort_by, sort_dir } = {}) => {
   const query = buildInstitucionesQuery();
+
+  if (search) {
+    const term = `%${search}%`;
+    query.where(function () {
+      this.where('instituciones.nombre', 'ilike', term)
+        .orWhere('instituciones.ciudad', 'ilike', term)
+        .orWhere('instituciones.direccion', 'ilike', term)
+        .orWhere('instituciones.telefono', 'ilike', term);
+    });
+  }
 
   if (estado === 'activas') {
     query.where('instituciones.activo', true);
@@ -480,6 +510,13 @@ export const listarInstituciones = ({ estado = 'todas' } = {}) => {
     query.where('instituciones.activo', false);
   } else if (estado !== 'todas') {
     throw new AppError('Filtro de estado no válido. Use: activas | desactivadas | todas', 400);
+  }
+
+  if (sort_by || sort_dir) {
+    validateInstitutionSortParams({ sort_by, sort_dir });
+    const direction = sort_dir ? sort_dir.toLowerCase() : 'asc';
+    const column = sort_by === 'activo' ? 'instituciones.activo' : sort_by || 'instituciones.nombre';
+    return query.orderBy(column, direction);
   }
 
   return query.orderBy([
@@ -676,6 +713,7 @@ export const listarDashboard = async (actor) => {
 export const listarMinijuegosAdmin = () =>
   db('minijuegos')
     .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
+    .where('minijuegos.visible_en_catalogo', true)
     .select(
       'minijuegos.id_minijuego as id',
       'minijuegos.slug',

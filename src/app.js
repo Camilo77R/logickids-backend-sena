@@ -1,6 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { env } from "./config/env.js";
 import { corsOriginHandler } from "./config/cors.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
@@ -21,6 +23,7 @@ import { buildCodigoEstelarMobileDebugPage } from "./debug/codigoEstelarMobilePa
 import adminRoutes from "./routes/admin.routes.js";
 import solicitudesRoutes from "./routes/solicitudes.routes.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(
@@ -31,6 +34,13 @@ app.use(
 );
 
 app.use(express.json());
+app.use(
+    "/email-assets",
+    express.static(join(__dirname, "assets/email"), {
+        maxAge: "7d",
+        fallthrough: false,
+    }),
+);
 
 if (env.NODE_ENV !== "production") {
     app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));

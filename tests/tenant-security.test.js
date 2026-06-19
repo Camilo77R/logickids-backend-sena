@@ -9,6 +9,10 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import app from '../src/app.js';
 import { getSuperadminToken } from './helpers/auth.helper.js';
+import {
+  buildTestInstitutionName,
+  registerTestInstitution,
+} from './helpers/testFixtures.helper.js';
 
 describe('🛡️ Seguridad — Solo superadmin gestiona instituciones', () => {
 
@@ -21,6 +25,24 @@ describe('🛡️ Seguridad — Solo superadmin gestiona instituciones', () => {
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('✅ superadmin puede buscar instituciones por texto', async () => {
+    const token = await getSuperadminToken();
+
+    const res = await request(app)
+      .get('/api/admin/instituciones?search=colegio')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(res.body.data.every((inst) =>
+      /colegio/i.test(inst.nombre) ||
+      /colegio/i.test(inst.institucion_ciudad || inst.ciudad) ||
+      /colegio/i.test(inst.direccion || '') ||
+      /colegio/i.test(inst.telefono || '')
+    )).toBe(true);
   });
 
   it('❌ un usuario sin token NO puede listar instituciones', async () => {
@@ -36,9 +58,10 @@ describe('🛡️ Seguridad — Solo superadmin gestiona instituciones', () => {
     const instRes = await request(app)
       .post('/api/admin/instituciones')
       .set('Authorization', `Bearer ${superToken}`)
-      .send({ nombre: `Test Tenant ${Date.now()}`, ciudad: 'Bogotá' });
+      .send({ nombre: buildTestInstitutionName(`Test Tenant ${Date.now()}`), ciudad: 'Bogotá' });
 
     expect(instRes.status).toBe(201);
+    registerTestInstitution(instRes.body.data.institucion.id);
 
     const { admin } = instRes.body.data;
 
