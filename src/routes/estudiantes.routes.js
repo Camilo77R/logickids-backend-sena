@@ -14,6 +14,7 @@ const router = Router();
 // Rutas públicas (sin JWT de tutor)
 router.post('/login',         validate(loginEstudianteSchema),   ctrl.loginEstudiante);
 router.get('/mi-perfil',      requireEstudiante,                 ctrl.miPerfil);
+router.get('/mi-ranking',     requireEstudiante,                 ctrl.miRanking);
 
 // Rutas protegidas
 router.use(requireAuth);

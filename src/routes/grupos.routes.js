@@ -14,6 +14,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', requireRole('admin', 'tutor'), ctrl.listar);
+router.get('/:id/ranking', requireRole('admin', 'tutor'), ctrl.obtenerRanking);
 router.get('/:id', requireRole('admin', 'tutor'), ctrl.obtener);
 router.post('/', requireRole('admin'), validate(crearGrupoSchema), ctrl.crear);
 router.put('/:id', requireRole('admin'), validate(actualizarGrupoSchema), ctrl.actualizar);
