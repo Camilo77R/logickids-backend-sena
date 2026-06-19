@@ -1,4 +1,5 @@
 import * as svc from '../services/grupos.service.js';
+import * as rankingSvc from '../services/ranking.service.js';
 import { ok, created } from '../utils/response.js';
 
 export const listar = async (req, res, next) => {
@@ -14,6 +15,13 @@ export const obtener = async (req, res, next) => {
   try {
     const data = await svc.obtener(req.params.id, req.user);
     ok(res, data, 'Grupo obtenido correctamente');
+  } catch (e) { next(e); }
+};
+
+export const obtenerRanking = async (req, res, next) => {
+  try {
+    const data = await rankingSvc.obtenerRankingGrupo(Number(req.params.id), req.user);
+    ok(res, data, 'Ranking del grupo obtenido correctamente');
   } catch (e) { next(e); }
 };
 
