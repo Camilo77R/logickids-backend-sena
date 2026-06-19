@@ -213,9 +213,9 @@ INSERT INTO public.minijuegos (
   slug, titulo, descripcion, habilidad_id, dificultad_maxima, activo, visible_en_catalogo, orden_catalogo
 )
 SELECT
-  'objeto-perdido',
-  'Encuentra el Objeto Perdido',
-  'Explora la escena y encuentra el objeto indicado antes de que se acabe el tiempo.',
+  'objeto-perdido-ar',
+  'Encuentra el Objeto Perdido AR',
+  'Busca objetos 3D simples dentro de un tablero delimitado en realidad aumentada.',
   id_habilidad,
   4,
   true,

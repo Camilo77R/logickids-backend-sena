@@ -25,6 +25,10 @@ import {
   MERCADO_INTELIGENTE_SLUG,
 } from '../games/mercadoInteligente/mercadoInteligente.config.js';
 import {
+  buildObjetoPerdidoArGameConfig,
+  OBJETO_PERDIDO_AR_SLUG,
+} from '../games/objetoPerdidoAr/objetoPerdidoAr.config.js';
+import {
   publishClassSessionChanged,
   publishRankingUpdated,
   publishStudentAccessChanged,
@@ -339,6 +343,8 @@ const buildGameConfig = (grupoId, minijuego, dificultad, configuracionBase = {})
       return buildCaminoArGameConfig(dificultad, configuracionNormalizada);
     case MERCADO_INTELIGENTE_SLUG:
       return buildMercadoInteligenteGameConfig(dificultad, configuracionNormalizada);
+    case OBJETO_PERDIDO_AR_SLUG:
+      return buildObjetoPerdidoArGameConfig(dificultad, configuracionNormalizada);
     default:
       return { ...configuracionNormalizada, dificultad };
   }

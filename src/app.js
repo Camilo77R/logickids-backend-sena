@@ -50,7 +50,7 @@ if (env.NODE_ENV !== "production") {
             .type("html")
             .send(
                 buildCodigoEstelarMobileDebugPage({
-                    suggestedApiBaseUrl: "http://192.168.31.80:3000/api",
+                    suggestedApiBaseUrl: "http://192.168.38.46:3000/api",
                     suggestedDifficulty: 2,
                 }),
             ),
