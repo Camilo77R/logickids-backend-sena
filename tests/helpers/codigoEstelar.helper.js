@@ -72,36 +72,24 @@ export const provisionPlayableStudent = async ({
   const adminToken = await loginAs(adminEmail, adminPassword);
 
   const tutorEmail = `tutor.${suffix}@logickids.dev`;
-  const tutorPassword = 'TutorPass123!';
-  const registerTutorRes = await request(app)
-    .post('/api/auth/registro')
+  const createTutorRes = await request(app)
+    .post('/api/admin/usuarios/tutores')
+    .set(authHeader(adminToken))
     .send({
       nombre: `Tutor ${suffix}`,
       email: tutorEmail,
-      contrasena: tutorPassword,
-      institucion_id: institutionId,
     });
 
-  if (registerTutorRes.status !== 201) {
-    throw new Error(`No se pudo registrar el tutor: ${JSON.stringify(registerTutorRes.body)}`);
+  if (createTutorRes.status !== 201) {
+    throw new Error(`No se pudo crear el tutor: ${JSON.stringify(createTutorRes.body)}`);
   }
 
-  const listUsersRes = await request(app)
-    .get('/api/admin/usuarios')
-    .set(authHeader(adminToken));
-
-  const tutorRecord = listUsersRes.body.data.find((user) => user.email === tutorEmail);
-  if (!tutorRecord) {
-    throw new Error('No se encontro el tutor recien creado en el listado admin.');
-  }
-
-  const activateTutorRes = await request(app)
-    .patch(`/api/admin/usuarios/${tutorRecord.id}/estado`)
-    .set(authHeader(adminToken))
-    .send({ estado: 'activo' });
-
-  if (activateTutorRes.status !== 200) {
-    throw new Error(`No se pudo activar el tutor: ${JSON.stringify(activateTutorRes.body)}`);
+  const tutorId = createTutorRes.body.data?.id;
+  const tutorPassword = createTutorRes.body.data?.contrasena_temporal;
+  if (!Number.isInteger(tutorId) || !tutorPassword) {
+    throw new Error(
+      `La respuesta de creacion del tutor no incluyo credenciales validas: ${JSON.stringify(createTutorRes.body)}`
+    );
   }
 
   const tutorToken = await loginAs(tutorEmail, tutorPassword);
@@ -125,7 +113,7 @@ export const provisionPlayableStudent = async ({
   const assignTutorRes = await request(app)
     .patch(`/api/grupos/${groupId}/tutor`)
     .set(authHeader(adminToken))
-    .send({ tutor_id: tutorRecord.id });
+    .send({ tutor_id: tutorId });
 
   if (assignTutorRes.status !== 200) {
     throw new Error(`No se pudo asignar el tutor al grupo: ${JSON.stringify(assignTutorRes.body)}`);
@@ -186,7 +174,7 @@ export const provisionPlayableStudent = async ({
     studentToken: studentLoginRes.body.data.token,
     institutionId,
     groupId,
-    tutorId: tutorRecord.id,
+    tutorId,
     studentId,
   };
 };
