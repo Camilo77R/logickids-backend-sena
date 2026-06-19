@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import app from '../src/app.js';
+import { getSuperadminToken } from './helpers/auth.helper.js';
 import {
   authHeader,
   provisionPlayableStudent,
@@ -51,5 +52,28 @@ describe('🧭 Catálogo pedagógico oficial', () => {
       'objeto-perdido',
     ]);
     expect(officialRoute.bloques.every((block) => block.niveles === 1)).toBe(true);
+  });
+
+  it('✅ el catálogo administrativo también oculta minijuegos fuera del catálogo oficial', async () => {
+    const superToken = await getSuperadminToken();
+
+    const res = await request(app)
+      .get('/api/admin/minijuegos')
+      .set(authHeader(superToken));
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const slugs = res.body.data.map((game) => game.slug);
+    expect([...slugs].sort()).toEqual([
+      'camino-ar',
+      'mercado-inteligente',
+      'objeto-perdido',
+      'robot-logico',
+      'tren-figuras',
+    ].sort());
+
+    expect(slugs).not.toContain('codigo-estelar');
+    expect(slugs).not.toContain('logica-secuencias');
   });
 });

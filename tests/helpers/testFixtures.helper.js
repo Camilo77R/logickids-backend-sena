@@ -52,11 +52,17 @@ const findSafeFixtureInstitutionIds = async (trx, institutionIds, isAllowedInsti
 };
 
 const findFixtureEntityIds = async (trx, institutionIds) => {
-  const [studentIds, groupIds, userIds] = await Promise.all([
-    trx('estudiantes').whereIn('institucion_id', institutionIds).pluck('id_estudiante'),
-    trx('grupos').whereIn('institucion_id', institutionIds).pluck('id_grupo'),
-    trx('usuarios').whereIn('institucion_id', institutionIds).pluck('id_usuario'),
-  ]);
+  // Un trx usa una sola conexion; ejecutar varias queries en paralelo sobre el
+  // mismo cliente provoca warnings y hace el cleanup menos predecible.
+  const studentIds = await trx('estudiantes')
+    .whereIn('institucion_id', institutionIds)
+    .pluck('id_estudiante');
+  const groupIds = await trx('grupos')
+    .whereIn('institucion_id', institutionIds)
+    .pluck('id_grupo');
+  const userIds = await trx('usuarios')
+    .whereIn('institucion_id', institutionIds)
+    .pluck('id_usuario');
 
   const classSessionIds =
     groupIds.length > 0

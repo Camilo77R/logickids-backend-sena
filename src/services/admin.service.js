@@ -104,11 +104,11 @@ const createProvisionedInstitutionUser = async (
 ) => {
   const contrasena_temporal = buildTemporaryPassword();
 
-  const [rol_id, estado_id, contrasena_hash] = await Promise.all([
-    resolveRoleId(rol, trx),
-    resolveUserStateId(estado, trx),
-    bcrypt.hash(contrasena_temporal, 10),
-  ]);
+  // Un trx comparte conexion; serializamos lecturas del catalogo para evitar
+  // queries concurrentes sobre el mismo cliente.
+  const rol_id = await resolveRoleId(rol, trx);
+  const estado_id = await resolveUserStateId(estado, trx);
+  const contrasena_hash = await bcrypt.hash(contrasena_temporal, 10);
 
   const [usuario] = await trx('usuarios')
     .insert({
@@ -713,6 +713,7 @@ export const listarDashboard = async (actor) => {
 export const listarMinijuegosAdmin = () =>
   db('minijuegos')
     .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
+    .where('minijuegos.visible_en_catalogo', true)
     .select(
       'minijuegos.id_minijuego as id',
       'minijuegos.slug',
