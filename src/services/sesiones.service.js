@@ -24,6 +24,11 @@ import {
   buildMercadoInteligenteGameConfig,
   MERCADO_INTELIGENTE_SLUG,
 } from '../games/mercadoInteligente/mercadoInteligente.config.js';
+import {
+  publishClassSessionChanged,
+  publishRankingUpdated,
+  publishStudentAccessChanged,
+} from '../realtime/realtime.events.js';
 
 /** Resuelve el ID de una tabla catálogo por su nombre usando la PK correcta */
 const resolveCatalogId = async (table, pkColumn, nombre, executor = db) => {
@@ -369,6 +374,55 @@ const buildSessionStartResponse = ({
   game_config: gameConfig,
 });
 
+const resolveRealtimeClassContext = async (sesionClaseId, executor = db) =>
+  executor('sesiones_clase as sc')
+    .join('grupos as grupo', 'grupo.id_grupo', 'sc.grupo_id')
+    .where('sc.id_sesion_clase', sesionClaseId)
+    .select(
+      'sc.id_sesion_clase as sesion_clase_id',
+      'sc.grupo_id',
+      'grupo.institucion_id',
+      'grupo.tutor_asignado_id'
+    )
+    .first();
+
+const emitPostFinalizationRealtimeUpdates = async ({ result, studentId, executor = db }) => {
+  if (result.finalizacion_idempotente || result.sesion_clase_id == null) {
+    return;
+  }
+
+  const realtimeContext = await resolveRealtimeClassContext(result.sesion_clase_id, executor);
+  if (!realtimeContext) {
+    return;
+  }
+
+  const commonPayload = {
+    institucionId: realtimeContext.institucion_id ?? null,
+    grupoId: realtimeContext.grupo_id,
+    sesionClaseId: realtimeContext.sesion_clase_id,
+    tutorId: realtimeContext.tutor_asignado_id ?? null,
+    studentId,
+  };
+
+  publishRankingUpdated({
+    ...commonPayload,
+    reason: 'session_finalized',
+  });
+
+  publishStudentAccessChanged({
+    ...commonPayload,
+    reason: 'session_finalized',
+  });
+
+  if (result.sesion_clase_cerrada) {
+    publishClassSessionChanged({
+      ...commonPayload,
+      sessionState: 'cerrada',
+      reason: 'finalizada',
+    });
+  }
+};
+
 const openStudentGameSession = async ({
   estudiante_id,
   minijuego_id,
@@ -462,6 +516,7 @@ const finalizarSesionInterna = async (
   );
 
   let progreso_ruta = null;
+  let sesion_clase_cerrada = false;
   if (sesionExistente.sesion_clase_id != null) {
     progreso_ruta = await avanzarParticipacionSesionClase(
       {
@@ -474,7 +529,10 @@ const finalizarSesionInterna = async (
     );
 
     if (cerrarSesionClase) {
-      await cerrarSesionClaseSiTermino(sesionExistente.sesion_clase_id, executor);
+      sesion_clase_cerrada = await cerrarSesionClaseSiTermino(
+        sesionExistente.sesion_clase_id,
+        executor
+      );
     }
   }
 
@@ -487,6 +545,7 @@ const finalizarSesionInterna = async (
     },
     logros_desbloqueados,
     progreso_ruta,
+    sesion_clase_cerrada,
     finalizacion_idempotente: false,
   };
 };
@@ -701,9 +760,12 @@ export const finalizar = async (
   executor = db
 ) => {
   if (executor === db) {
-    return db.transaction((trx) =>
+    const result = await db.transaction((trx) =>
       finalizarSesionInterna(sesion_id, estudiante_id, { estado, cerrarSesionClase }, trx)
     );
+
+    await emitPostFinalizationRealtimeUpdates({ result, studentId: estudiante_id });
+    return result;
   }
 
   return finalizarSesionInterna(

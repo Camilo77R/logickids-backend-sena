@@ -15,6 +15,11 @@ import {
   resolvePlanSesionClase,
 } from './sesionesClase.service.js';
 import { abandonarSesionesActivasDeClase } from './sesiones.service.js';
+import {
+  publishClassSessionChanged,
+  publishRankingUpdated,
+  publishStudentAccessChanged,
+} from '../realtime/realtime.events.js';
 
 const GROUP_FIELDS = [
   'grupos.id_grupo as id',
@@ -189,6 +194,31 @@ const closeActiveClassForGroup = async (grupoId, { cierreMotivo, estado }, trx) 
   );
 };
 
+const emitGroupSessionRefresh = ({
+  institucionId,
+  grupoId,
+  tutorId,
+  sesionClaseId,
+  sessionState,
+  reason,
+}) => {
+  if (sesionClaseId == null) {
+    return;
+  }
+
+  const payload = {
+    institucionId: institucionId ?? null,
+    grupoId,
+    tutorId: tutorId ?? null,
+    sesionClaseId,
+    sessionState,
+    reason,
+  };
+
+  publishClassSessionChanged(payload);
+  publishRankingUpdated(payload);
+};
+
 export const listar = async (user) => {
   const query = buildGroupQuery().select(GROUP_FIELDS);
   applyGroupAccessScope(query, user);
@@ -279,8 +309,8 @@ export const asignarTutor = async (id_grupo, actor, tutor_id) => {
     await resolveTutorAsignable(tutor_id, actor);
   }
 
-  await db.transaction(async (trx) => {
-    await closeActiveClassForGroup(id_grupo, {
+  const result = await db.transaction(async (trx) => {
+    const sesionCerrada = await closeActiveClassForGroup(id_grupo, {
       cierreMotivo: 'reasignacion_tutor',
       estado: ESTADOS_SESION_CLASE.cancelada,
     }, trx);
@@ -309,6 +339,16 @@ export const asignarTutor = async (id_grupo, actor, tutor_id) => {
         activo: true,
       });
     }
+    return { sesionCerrada };
+  });
+
+  emitGroupSessionRefresh({
+    institucionId: group.institucion_id,
+    grupoId: id_grupo,
+    tutorId: group.tutor_asignado_id ?? actor.id,
+    sesionClaseId: result.sesionCerrada?.id ?? null,
+    sessionState: ESTADOS_SESION_CLASE.cancelada,
+    reason: 'reasignacion_tutor',
   });
 
   return obtener(id_grupo, actor);
@@ -326,7 +366,7 @@ export const archivar = async (id_grupo, user) => {
   return db.transaction(async (trx) => {
     const affectedStudents = await getActiveStudentIdsByGroup(id_grupo, user, trx);
 
-    await closeActiveClassForGroup(id_grupo, {
+    const sesionCerrada = await closeActiveClassForGroup(id_grupo, {
       cierreMotivo: 'grupo_archivado',
       estado: ESTADOS_SESION_CLASE.cancelada,
     }, trx);
@@ -350,11 +390,39 @@ export const archivar = async (id_grupo, user) => {
     return {
       estudiantes_desvinculados: affectedStudents.length,
       sesiones_cerradas: affectedStudents.length,
+      affectedStudents,
+      sesion_cerrada_id: sesionCerrada?.id ?? null,
     };
   }).then(async (summary) => ({
     ...(await obtener(id_grupo, user)),
     ...summary,
-  }));
+  })).then((summary) => {
+    emitGroupSessionRefresh({
+      institucionId: group.institucion_id,
+      grupoId: id_grupo,
+      tutorId: group.tutor_asignado_id ?? null,
+      sesionClaseId: summary.sesion_cerrada_id,
+      sessionState: ESTADOS_SESION_CLASE.cancelada,
+      reason: 'grupo_archivado',
+    });
+
+    if (summary.affectedStudents.length) {
+      publishStudentAccessChanged({
+        institucionId: group.institucion_id ?? null,
+        grupoAnteriorId: id_grupo,
+        studentIds: summary.affectedStudents,
+        reason: 'group_archived',
+      });
+    }
+
+    const {
+      affectedStudents: _affectedStudents,
+      sesion_cerrada_id: _sesionCerradaId,
+      ...publicSummary
+    } = summary;
+
+    return publicSummary;
+  });
 };
 
 export const restaurar = async (id_grupo, user) => {
@@ -412,6 +480,15 @@ export const toggleSesion = async (
       }, trx);
     });
 
+    emitGroupSessionRefresh({
+      institucionId: group.institucion_id,
+      grupoId: id_grupo,
+      tutorId: user.id,
+      sesionClaseId: sesionActiva.id,
+      sessionState: ESTADOS_SESION_CLASE.cerrada,
+      reason: 'manual',
+    });
+
     return {
       actualizados: Number(total ?? 0),
       sesion_activa: false,
@@ -453,6 +530,15 @@ export const toggleSesion = async (
   });
 
   const resumenSesion = await obtenerResumenSesionActivaParaGrupo(id_grupo);
+  emitGroupSessionRefresh({
+    institucionId: group.institucion_id,
+    grupoId: id_grupo,
+    tutorId: user.id,
+    sesionClaseId: resumenSesion?.sesion_clase_id ?? null,
+    sessionState: ESTADOS_SESION_CLASE.activa,
+    reason: 'manual',
+  });
+
   return {
     actualizados: studentIds.length,
     sesion_activa: true,

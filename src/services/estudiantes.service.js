@@ -15,6 +15,7 @@ import {
 } from './sesionesClase.service.js';
 import { finalizar } from './sesiones.service.js';
 import { randomCode } from '../utils/codes.js';
+import { publishStudentAccessChanged } from '../realtime/realtime.events.js';
 
 const SESION_ACTIVA_STUDENT_RAW = db.raw(`
   EXISTS (
@@ -319,7 +320,7 @@ export const actualizar = async (id_estudiante, user, datos) => {
 };
 
 export const desactivar = async (id_estudiante, user) => {
-  await assertStudentBelongsToUser(id_estudiante, user);
+  const student = await assertStudentBelongsToUser(id_estudiante, user);
 
   const { id_estado_estudiante: idInactivo } = await db('estados_estudiante')
     .where({ nombre: 'inactivo' })
@@ -343,10 +344,17 @@ export const desactivar = async (id_estudiante, user) => {
       .where({ id_estudiante })
       .update({ estado_id: idInactivo, actualizado_en: trx.fn.now() });
   });
+
+  publishStudentAccessChanged({
+    institucionId: user.institucion_id ?? student.institucion_id ?? null,
+    studentId: id_estudiante,
+    grupoAnteriorId: student.grupo_id ?? null,
+    reason: 'student_deactivated',
+  });
 };
 
 export const reactivar = async (id_estudiante, user) => {
-  await assertStudentBelongsToUser(id_estudiante, user);
+  const student = await assertStudentBelongsToUser(id_estudiante, user);
 
   const { id_estado_estudiante: idActivo } = await db('estados_estudiante')
     .where({ nombre: 'activo' })
@@ -366,6 +374,13 @@ export const reactivar = async (id_estudiante, user) => {
   await db('estudiantes')
     .where({ id_estudiante })
     .update({ estado_id: idActivo, actualizado_en: db.fn.now() });
+
+  publishStudentAccessChanged({
+    institucionId: user.institucion_id ?? student.institucion_id ?? null,
+    studentId: id_estudiante,
+    grupoId: student.grupo_id ?? null,
+    reason: 'student_reactivated',
+  });
 };
 
 export const obtenerQR = async (id_estudiante, user) => {
@@ -403,6 +418,14 @@ export const cambiarGrupo = async (id_estudiante, user, nuevo_grupo_id) => {
       })
       .onConflict(['estudiante_id', 'grupo_id', 'fecha_inicio'])
       .merge({ activo: true, fecha_fin: null });
+  });
+
+  publishStudentAccessChanged({
+    institucionId: user.institucion_id ?? newGroup.institucion_id ?? null,
+    studentId: id_estudiante,
+    grupoAnteriorId: student.grupo_id ?? null,
+    grupoId: nuevo_grupo_id,
+    reason: 'group_changed',
   });
 
   return db('estudiantes')
