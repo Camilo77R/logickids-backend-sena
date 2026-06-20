@@ -193,11 +193,18 @@ const buildRankingEntries = (rows) => {
     ultima_finalizacion: row.ultima_finalizacion ?? null,
   }));
 
-  normalizedRows.sort(compareRankingEntries);
+  const participantes = normalizedRows.filter(
+    (r) => r.puntaje_total > 0 || r.sesiones_finalizadas > 0
+  );
+  const sinParticipacion = normalizedRows.filter(
+    (r) => r.puntaje_total === 0 && r.sesiones_finalizadas === 0
+  );
 
-  return normalizedRows.map((row, index) => {
-    const previousEntry = index > 0 ? normalizedRows[index - 1] : null;
-    const previousPosition = index > 0 ? normalizedRows[index - 1]._rankingPosition : null;
+  participantes.sort(compareRankingEntries);
+
+  const ranked = participantes.map((row, index) => {
+    const previousEntry = index > 0 ? participantes[index - 1] : null;
+    const previousPosition = index > 0 ? participantes[index - 1]._rankingPosition : null;
     const rankingPosition =
       previousEntry && hasSameRankingMetrics(previousEntry, row) ? previousPosition : index + 1;
 
@@ -218,8 +225,29 @@ const buildRankingEntries = (rows) => {
       sesiones_finalizadas: row.sesiones_finalizadas,
       ultima_finalizacion: row.ultima_finalizacion,
       esta_en_top3: index < 3,
+      participacion: true,
     };
   });
+
+  const sinRanking = sinParticipacion.map((row) => ({
+    posicion: null,
+    estudiante_id: row.estudiante_id,
+    nombre: row.nombre,
+    color_avatar: row.color_avatar,
+    participante_estado: row.participante_estado,
+    valor: 0,
+    puntaje: 0,
+    aciertos: 0,
+    errores: 0,
+    combo_maximo: 0,
+    estrellas_totales: 0,
+    sesiones_finalizadas: 0,
+    ultima_finalizacion: null,
+    esta_en_top3: false,
+    participacion: false,
+  }));
+
+  return [...ranked, ...sinRanking];
 };
 
 const buildRankingPayload = ({ scope, rows, ownerStudentId = null }) => {
