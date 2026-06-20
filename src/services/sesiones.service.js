@@ -86,18 +86,18 @@ const SOCKET_EVENTS_BY_SLUG = Object.freeze({
  * - aun así, este servicio vuelve a consultar la base para aplicar defensa en
  *   profundidad y para resolver el grupo activo con el que se armará la sala
  */
-const resolvePlayableStudentContext = async (estudiante_id) =>
-  db('estudiantes')
+const resolvePlayableStudentContext = async (estudiante_id, executor = db) =>
+  executor('estudiantes')
     .join('estados_estudiante', 'estados_estudiante.id_estado_estudiante', 'estudiantes.estado_id')
     .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
     .leftJoin('estudiante_grupo_historial as egh', function joinCurrentGroup() {
       this.on('egh.estudiante_id', 'estudiantes.id_estudiante')
-        .andOn('egh.activo', db.raw('TRUE'))
+        .andOn('egh.activo', executor.raw('TRUE'))
         .andOnNull('egh.fecha_fin');
     })
     .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
     .leftJoin('sesiones_clase as sc', function joinActiveClassSession() {
-      this.on('sc.grupo_id', 'egh.grupo_id').andOn('sc.estado', db.raw('?', ['activa']));
+      this.on('sc.grupo_id', 'egh.grupo_id').andOn('sc.estado', executor.raw('?', ['activa']));
     })
     .leftJoin('sesion_clase_participantes as participante', function joinParticipantSnapshot() {
       this.on('participante.sesion_clase_id', 'sc.id_sesion_clase')
@@ -157,8 +157,17 @@ const assertPlayableStudentContext = (context) => {
   }
 };
 
-const resolveMinijuegoCatalog = async (minijuego_id) => {
-  const minijuego = await db('minijuegos')
+const lockParticipantTurn = ({ sesionClaseId, estudianteId }, executor = db) =>
+  executor('sesion_clase_participantes')
+    .where({
+      sesion_clase_id: sesionClaseId,
+      estudiante_id: estudianteId,
+    })
+    .forUpdate()
+    .first();
+
+const resolveMinijuegoCatalog = async (minijuego_id, executor = db) => {
+  const minijuego = await executor('minijuegos')
     .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
     .where({
       'minijuegos.id_minijuego': minijuego_id,
@@ -181,12 +190,12 @@ const resolveMinijuegoCatalog = async (minijuego_id) => {
   return minijuego;
 };
 
-const resolveSuggestedDifficulty = async (estudiante_id, minijuego) => {
-  const stats = await db('estadisticas_habilidad')
+const resolveSuggestedDifficulty = async (estudiante_id, minijuego, executor = db) => {
+  const stats = await executor('estadisticas_habilidad')
     .where({ estudiante_id, habilidad_id: minijuego.habilidad_id })
     .first();
 
-  const recentSessions = await db('sesiones_juego')
+  const recentSessions = await executor('sesiones_juego')
     .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
     .where({
       'sesiones_juego.estudiante_id': estudiante_id,
@@ -282,9 +291,14 @@ const resolveSuggestedDifficulty = async (estudiante_id, minijuego) => {
   };
 };
 
-const resolveInitialDifficulty = async (estudiante_id, minijuego, requestedDifficulty) => {
+const resolveInitialDifficulty = async (
+  estudiante_id,
+  minijuego,
+  requestedDifficulty,
+  executor = db
+) => {
   if (requestedDifficulty == null) {
-    return resolveSuggestedDifficulty(estudiante_id, minijuego);
+    return resolveSuggestedDifficulty(estudiante_id, minijuego, executor);
   }
 
   if (requestedDifficulty > minijuego.dificultad_maxima) {
@@ -440,6 +454,26 @@ const openStudentGameSession = async ({
     'abandonado',
     executor
   );
+
+  const sesionActivaMismaActividad = await executor('sesiones_juego')
+    .where({
+      estudiante_id,
+      estado_id: activo_id,
+      sesion_clase_id,
+      orden_en_ruta,
+      minijuego_id,
+    })
+    .orderBy('id_sesion_juego', 'desc')
+    .first();
+
+  if (sesionActivaMismaActividad) {
+    await executor('sesiones_juego')
+      .where({ estudiante_id, estado_id: activo_id })
+      .whereNot({ id_sesion_juego: sesionActivaMismaActividad.id_sesion_juego })
+      .update({ estado_id: abandonado_id, finalizada_en: executor.fn.now() });
+
+    return sesionActivaMismaActividad;
+  }
 
   await executor('sesiones_juego')
     .where({ estudiante_id, estado_id: activo_id })
@@ -622,73 +656,96 @@ const buildPersistedOfficialSummary = (sesion) => ({
  * Verifica que la sesión del aula esté activa antes de permitir el inicio.
  */
 export const iniciar = async (estudiante_id, { minijuego_id, dificultad: requestedDifficulty }) => {
-  const playableContext = await resolvePlayableStudentContext(estudiante_id);
-  assertPlayableStudentContext(playableContext);
+  return db.transaction(async (trx) => {
+    let playableContext = await resolvePlayableStudentContext(estudiante_id, trx);
+    assertPlayableStudentContext(playableContext);
 
-  const configuredMinigameId = playableContext.sesion_minijuego_id ?? null;
-  const selectedMinigameId = configuredMinigameId ?? minijuego_id ?? null;
+    await lockParticipantTurn(
+      {
+        sesionClaseId: playableContext.sesion_clase_id,
+        estudianteId: estudiante_id,
+      },
+      trx
+    );
 
-  if (!selectedMinigameId) {
-    throw new AppError('La sesión del grupo no tiene un minijuego configurado todavía', 409);
-  }
+    playableContext = await resolvePlayableStudentContext(estudiante_id, trx);
+    assertPlayableStudentContext(playableContext);
 
-  if (configuredMinigameId && minijuego_id && configuredMinigameId !== minijuego_id) {
-    throw new AppError('El grupo fue abierto para un minijuego diferente al solicitado', 409);
-  }
+    const configuredMinigameId = playableContext.sesion_minijuego_id ?? null;
+    const selectedMinigameId = configuredMinigameId ?? minijuego_id ?? null;
 
-  const minijuego = await resolveMinijuegoCatalog(selectedMinigameId);
-  const adaptationDecision = await resolveInitialDifficulty(
-    estudiante_id,
-    minijuego,
-    requestedDifficulty
-  );
-  const dificultad = adaptationDecision.dificultad;
-  const fuenteAdaptacion = adaptationDecision.fuente;
-  const gameConfig = buildGameConfig(
-    playableContext.grupo_id,
-    minijuego,
-    dificultad,
-    playableContext.sesion_configuracion_base
-  );
-  const appliedConfig = {
-    ...gameConfig,
-    adaptacion: {
-      fuente: adaptationDecision.fuente,
-      motivo: adaptationDecision.motivo,
-      metricas: adaptationDecision.metricas,
-    },
-  };
-
-  await marcarParticipanteEnProgreso(
-    {
-      sesionClaseId: playableContext.sesion_clase_id,
-      estudianteId: estudiante_id,
+    if (!selectedMinigameId) {
+      throw new AppError('La sesión del grupo no tiene un minijuego configurado todavía', 409);
     }
-  );
 
-  const sesion = await openStudentGameSession({
-    estudiante_id,
-    minijuego_id: minijuego.id,
-    dificultad,
-    sesion_clase_id: playableContext.sesion_clase_id,
-    orden_en_ruta: playableContext.sesion_paso_actual ?? 1,
-    configuracion_aplicada: appliedConfig,
-    fuente_adaptacion: fuenteAdaptacion,
-    executor: db,
-  });
+    if (configuredMinigameId && minijuego_id && configuredMinigameId !== minijuego_id) {
+      throw new AppError('El grupo fue abierto para un minijuego diferente al solicitado', 409);
+    }
 
-  return buildSessionStartResponse({
-    sesion,
-    grupoId: playableContext.grupo_id,
-    minijuego,
-    dificultad,
-    sesionClaseId: playableContext.sesion_clase_id,
-    sesionModo: playableContext.sesion_modo,
-    rutaPedagogicaId: playableContext.sesion_ruta_id,
-    ordenEnRuta: playableContext.sesion_paso_actual ?? 1,
-    bloqueActual: playableContext.sesion_bloque_actual ?? 1,
-    nivelEnBloque: playableContext.sesion_nivel_en_bloque ?? 1,
-    gameConfig: appliedConfig,
+    const minijuego = await resolveMinijuegoCatalog(selectedMinigameId, trx);
+    const adaptationDecision = await resolveInitialDifficulty(
+      estudiante_id,
+      minijuego,
+      requestedDifficulty,
+      trx
+    );
+    const dificultad = adaptationDecision.dificultad;
+    const fuenteAdaptacion = adaptationDecision.fuente;
+    const gameConfig = buildGameConfig(
+      playableContext.grupo_id,
+      minijuego,
+      dificultad,
+      playableContext.sesion_configuracion_base
+    );
+    const appliedConfig = {
+      ...gameConfig,
+      adaptacion: {
+        fuente: adaptationDecision.fuente,
+        motivo: adaptationDecision.motivo,
+        metricas: adaptationDecision.metricas,
+      },
+    };
+
+    await marcarParticipanteEnProgreso(
+      {
+        sesionClaseId: playableContext.sesion_clase_id,
+        estudianteId: estudiante_id,
+      },
+      trx
+    );
+
+    const sesion = await openStudentGameSession({
+      estudiante_id,
+      minijuego_id: minijuego.id,
+      dificultad,
+      sesion_clase_id: playableContext.sesion_clase_id,
+      orden_en_ruta: playableContext.sesion_paso_actual ?? 1,
+      configuracion_aplicada: appliedConfig,
+      fuente_adaptacion: fuenteAdaptacion,
+      executor: trx,
+    });
+
+    const effectiveDifficulty = Number(sesion.dificultad ?? dificultad);
+    const effectiveGameConfig =
+      sesion.configuracion_aplicada &&
+      typeof sesion.configuracion_aplicada === 'object' &&
+      !Array.isArray(sesion.configuracion_aplicada)
+        ? sesion.configuracion_aplicada
+        : appliedConfig;
+
+    return buildSessionStartResponse({
+      sesion,
+      grupoId: playableContext.grupo_id,
+      minijuego,
+      dificultad: effectiveDifficulty,
+      sesionClaseId: playableContext.sesion_clase_id,
+      sesionModo: playableContext.sesion_modo,
+      rutaPedagogicaId: playableContext.sesion_ruta_id,
+      ordenEnRuta: playableContext.sesion_paso_actual ?? 1,
+      bloqueActual: playableContext.sesion_bloque_actual ?? 1,
+      nivelEnBloque: playableContext.sesion_nivel_en_bloque ?? 1,
+      gameConfig: effectiveGameConfig,
+    });
   });
 };
 

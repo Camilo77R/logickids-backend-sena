@@ -37,6 +37,46 @@ describe('🎮 Sesiones — Código Estelar MVP', () => {
     expect(res.body.data.game_config.numero_objetivo).toBeLessThanOrEqual(50);
   });
 
+  it('✅ reutiliza la sesión activa si el estudiante reintenta iniciar el mismo paso', async () => {
+    const codigoEstelarId = await resolveCodigoEstelarId();
+    const fixture = await provisionPlayableStudent();
+
+    const firstStartRes = await request(app)
+      .post('/api/sesiones/iniciar')
+      .set(authHeader(fixture.studentToken))
+      .send({
+        minijuego_id: codigoEstelarId,
+        dificultad: 2,
+      });
+
+    expect(firstStartRes.status).toBe(201);
+
+    const secondStartRes = await request(app)
+      .post('/api/sesiones/iniciar')
+      .set(authHeader(fixture.studentToken))
+      .send({
+        minijuego_id: codigoEstelarId,
+        dificultad: 2,
+      });
+
+    expect(secondStartRes.status).toBe(201);
+    expect(secondStartRes.body.data.sesion.id).toBe(firstStartRes.body.data.sesion.id);
+
+    const sesiones = await db('sesiones_juego')
+      .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
+      .where({
+        'sesiones_juego.estudiante_id': fixture.studentId,
+        'sesiones_juego.sesion_clase_id': firstStartRes.body.data.sesion.sesion_clase_id,
+      })
+      .select('sesiones_juego.id_sesion_juego', 'estados_sesion.nombre as estado');
+
+    expect(sesiones).toHaveLength(1);
+    expect(sesiones[0]).toMatchObject({
+      id_sesion_juego: firstStartRes.body.data.sesion.id,
+      estado: 'activo',
+    });
+  });
+
   it('❌ no permite iniciar si la institución fue desactivada aunque el estudiante conserve un token viejo', async () => {
     const codigoEstelarId = await resolveCodigoEstelarId();
     const fixture = await provisionPlayableStudent();

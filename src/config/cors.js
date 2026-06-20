@@ -1,9 +1,19 @@
 import { env } from './env.js';
 
-const configuredOrigins = env.CORS_ORIGIN
+const configuredOriginRules = env.CORS_ORIGIN
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const escapeRegex = (value) => value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+
+const buildWildcardMatcher = (originRule) =>
+  new RegExp(`^${originRule.split('*').map(escapeRegex).join('.*')}$`);
+
+const configuredOrigins = configuredOriginRules.filter((origin) => !origin.includes('*'));
+const configuredOriginMatchers = configuredOriginRules
+  .filter((origin) => origin.includes('*'))
+  .map(buildWildcardMatcher);
 
 const isPrivate172Address = (hostname) => {
   const match = /^172\.(\d{1,2})\./.exec(hostname);
@@ -53,6 +63,10 @@ export const isAllowedCorsOrigin = (origin) => {
   }
 
   if (configuredOrigins.includes(origin)) {
+    return true;
+  }
+
+  if (configuredOriginMatchers.some((matcher) => matcher.test(origin))) {
     return true;
   }
 
