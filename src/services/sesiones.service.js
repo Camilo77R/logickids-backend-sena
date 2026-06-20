@@ -4,6 +4,10 @@ import { assertSessionBelongsToUser, assertStudentBelongsToUser } from './access
 import { actualizarStats } from './estadisticas.service.js';
 import { evaluarLogrosSesion } from './logros.service.js';
 import {
+  calculateAdaptiveDifficulty,
+  calculateInActivityDifficulty,
+} from './dificultadAdaptativa.service.js';
+import {
   avanzarParticipacionSesionClase,
   cerrarSesionClaseSiTermino,
   ESTADOS_PARTICIPANTE_SESION,
@@ -215,90 +219,58 @@ const resolveSuggestedDifficulty = async (estudiante_id, minijuego, executor = d
     .orderBy('sesiones_juego.finalizada_en', 'desc')
     .limit(3);
 
-  if (!stats || stats.total_intentos <= 0) {
-    return {
-      dificultad: 1,
-      fuente: 'reglas',
-      motivo: 'Primera experiencia o sin estadisticas suficientes para esta habilidad.',
-      metricas: {
-        habilidad: minijuego.habilidad,
-        total_intentos: 0,
-        sesiones_recientes: 0,
-      },
-    };
-  }
-
-  const precision = Number(stats.precision_pct);
-  const totalAttempts = Number(stats.total_intentos ?? 0);
-  const averageReaction = Number(stats.promedio_reaccion_ms ?? 0);
-  const lastSession = recentSessions[0] ?? null;
-  const lastDifficulty = Number(lastSession?.dificultad ?? 1);
-  const recentCompleted = recentSessions.filter((session) => session.estado === 'completado');
-  const recentAcciertos = recentSessions.reduce((sum, session) => sum + Number(session.aciertos ?? 0), 0);
-  const recentErrores = recentSessions.reduce((sum, session) => sum + Number(session.errores ?? 0), 0);
-  const recentTotal = recentAcciertos + recentErrores;
-  const recentPrecision = recentTotal > 0 ? (recentAcciertos / recentTotal) * 100 : precision;
-  const strongStreak =
-    recentCompleted.length >= 2 &&
-    recentCompleted.slice(0, 2).every((session) => {
-      const attempts = Number(session.aciertos ?? 0) + Number(session.errores ?? 0);
-      if (attempts === 0) return false;
-      return (Number(session.aciertos ?? 0) / attempts) * 100 >= 80;
-    });
-
-  let nextDifficulty = lastDifficulty;
-  let motivo = 'Se mantiene la dificultad para consolidar la habilidad.';
-
-  if (totalAttempts < 8) {
-    nextDifficulty = Math.min(Math.max(lastDifficulty, 1), minijuego.dificultad_maxima);
-    motivo = 'Aun hay pocos intentos acumulados; se evita subir dificultad hasta tener mas evidencia.';
-  } else if (precision >= 85 && recentPrecision >= 80 && strongStreak) {
-    nextDifficulty = lastDifficulty + 1;
-    motivo = 'Sube un nivel por alta precision historica y buen rendimiento en sesiones recientes.';
-  } else if (precision < 50 || recentPrecision < 45) {
-    nextDifficulty = lastDifficulty - 1;
-    motivo = 'Baja un nivel porque la precision indica que necesita refuerzo previo.';
-  } else if (precision >= 70 && recentPrecision >= 65 && averageReaction > 0 && averageReaction <= 2500) {
-    nextDifficulty = lastDifficulty;
-    motivo = 'Mantiene dificultad: hay progreso, pero conviene afianzar antes de subir.';
-  } else if (precision >= 65) {
-    nextDifficulty = Math.max(lastDifficulty, 2);
-    motivo = 'Ajuste moderado por precision aceptable en la habilidad.';
-  } else {
-    nextDifficulty = Math.min(lastDifficulty, 2);
-    motivo = 'Se prioriza practica guiada porque la precision aun esta en refuerzo.';
-  }
-
-  const dificultad = Math.max(1, Math.min(minijuego.dificultad_maxima, nextDifficulty));
-
-  return {
-    dificultad,
-    fuente: 'reglas',
-    motivo,
-    metricas: {
-      habilidad: minijuego.habilidad,
-      precision_historica: precision,
-      precision_reciente: Number(recentPrecision.toFixed(2)),
-      total_intentos: totalAttempts,
-      aciertos: Number(stats.aciertos ?? 0),
-      errores: Number(stats.errores ?? 0),
-      promedio_reaccion_ms: stats.promedio_reaccion_ms,
-      sesiones_recientes: recentSessions.length,
-      ultima_dificultad: lastDifficulty,
-      dificultad_maxima: minijuego.dificultad_maxima,
-      racha_fuerte: strongStreak,
-    },
-  };
+  return calculateAdaptiveDifficulty({ stats, recentSessions, minigame: minijuego });
 };
+
+const resolvePreviousActivitySession = (
+  { estudiante_id, minijuego_id, sesion_clase_id, orden_en_ruta },
+  executor = db
+) =>
+  executor('sesiones_juego')
+    .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
+    .where({
+      'sesiones_juego.estudiante_id': estudiante_id,
+      'sesiones_juego.minijuego_id': minijuego_id,
+      'sesiones_juego.sesion_clase_id': sesion_clase_id,
+    })
+    .where('sesiones_juego.orden_en_ruta', '<', orden_en_ruta)
+    .whereIn('estados_sesion.nombre', ['completado', 'abandonado'])
+    .select(
+      'sesiones_juego.id_sesion_juego',
+      'sesiones_juego.orden_en_ruta',
+      'sesiones_juego.dificultad',
+      'sesiones_juego.aciertos',
+      'sesiones_juego.errores',
+      'sesiones_juego.finalizada_en',
+      'estados_sesion.nombre as estado'
+    )
+    .orderBy('sesiones_juego.orden_en_ruta', 'desc')
+    .orderBy('sesiones_juego.finalizada_en', 'desc')
+    .first();
 
 const resolveInitialDifficulty = async (
   estudiante_id,
   minijuego,
   requestedDifficulty,
+  difficultyMode = 'adaptativo',
   executor = db
 ) => {
+  if (difficultyMode !== 'manual') {
+    const decision = await resolveSuggestedDifficulty(estudiante_id, minijuego, executor);
+
+    if (requestedDifficulty != null) {
+      decision.metricas = {
+        ...decision.metricas,
+        dificultad_enviada_por_cliente: requestedDifficulty,
+        dificultad_enviada_ignorada: true,
+      };
+    }
+
+    return decision;
+  }
+
   if (requestedDifficulty == null) {
-    return resolveSuggestedDifficulty(estudiante_id, minijuego, executor);
+    throw new AppError('El modo manual requiere una dificultad explicita', 400);
   }
 
   if (requestedDifficulty > minijuego.dificultad_maxima) {
@@ -655,7 +627,10 @@ const buildPersistedOfficialSummary = (sesion) => ({
  * Inicia una sesión de juego para un estudiante.
  * Verifica que la sesión del aula esté activa antes de permitir el inicio.
  */
-export const iniciar = async (estudiante_id, { minijuego_id, dificultad: requestedDifficulty }) => {
+export const iniciar = async (
+  estudiante_id,
+  { minijuego_id, dificultad: requestedDifficulty, modo_dificultad: difficultyMode = 'adaptativo' }
+) => {
   return db.transaction(async (trx) => {
     let playableContext = await resolvePlayableStudentContext(estudiante_id, trx);
     assertPlayableStudentContext(playableContext);
@@ -683,12 +658,39 @@ export const iniciar = async (estudiante_id, { minijuego_id, dificultad: request
     }
 
     const minijuego = await resolveMinijuegoCatalog(selectedMinigameId, trx);
-    const adaptationDecision = await resolveInitialDifficulty(
-      estudiante_id,
-      minijuego,
-      requestedDifficulty,
-      trx
-    );
+    const currentOrder = playableContext.sesion_paso_actual ?? 1;
+    const previousActivitySession =
+      difficultyMode !== 'manual' && currentOrder > 1
+        ? await resolvePreviousActivitySession(
+            {
+              estudiante_id,
+              minijuego_id: minijuego.id,
+              sesion_clase_id: playableContext.sesion_clase_id,
+              orden_en_ruta: currentOrder,
+            },
+            trx
+          )
+        : null;
+    const adaptationDecision = previousActivitySession
+      ? calculateInActivityDifficulty({
+          previousSession: previousActivitySession,
+          minigame: minijuego,
+        })
+      : await resolveInitialDifficulty(
+          estudiante_id,
+          minijuego,
+          requestedDifficulty,
+          difficultyMode,
+          trx
+        );
+
+    if (previousActivitySession && requestedDifficulty != null) {
+      adaptationDecision.metricas = {
+        ...adaptationDecision.metricas,
+        dificultad_enviada_por_cliente: requestedDifficulty,
+        dificultad_enviada_ignorada: true,
+      };
+    }
     const dificultad = adaptationDecision.dificultad;
     const fuenteAdaptacion = adaptationDecision.fuente;
     const gameConfig = buildGameConfig(
@@ -719,7 +721,7 @@ export const iniciar = async (estudiante_id, { minijuego_id, dificultad: request
       minijuego_id: minijuego.id,
       dificultad,
       sesion_clase_id: playableContext.sesion_clase_id,
-      orden_en_ruta: playableContext.sesion_paso_actual ?? 1,
+      orden_en_ruta: currentOrder,
       configuracion_aplicada: appliedConfig,
       fuente_adaptacion: fuenteAdaptacion,
       executor: trx,
@@ -741,7 +743,7 @@ export const iniciar = async (estudiante_id, { minijuego_id, dificultad: request
       sesionClaseId: playableContext.sesion_clase_id,
       sesionModo: playableContext.sesion_modo,
       rutaPedagogicaId: playableContext.sesion_ruta_id,
-      ordenEnRuta: playableContext.sesion_paso_actual ?? 1,
+      ordenEnRuta: currentOrder,
       bloqueActual: playableContext.sesion_bloque_actual ?? 1,
       nivelEnBloque: playableContext.sesion_nivel_en_bloque ?? 1,
       gameConfig: effectiveGameConfig,
@@ -920,6 +922,7 @@ export const listarHistorialEstudiante = (estudiante_id) =>
       'paso.bloque_orden',
       'paso.nivel_en_bloque',
       'sesiones_juego.fuente_adaptacion',
+      'sesiones_juego.configuracion_aplicada',
       'sesiones_juego.iniciada_en',
       'sesiones_juego.finalizada_en',
       'estados_sesion.nombre as estado',
