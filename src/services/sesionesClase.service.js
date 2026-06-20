@@ -345,7 +345,7 @@ export const marcarParticipanteEnProgreso = async (
     ])
     .update({
       estado: ESTADOS_PARTICIPANTE_SESION.enProgreso,
-      iniciada_en: db.raw('COALESCE(iniciada_en, now())'),
+      iniciada_en: executor.raw('COALESCE(iniciada_en, now())'),
     })
     .returning([
       'sesion_clase_id',

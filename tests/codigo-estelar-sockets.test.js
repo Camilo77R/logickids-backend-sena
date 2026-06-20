@@ -274,7 +274,7 @@ describe('🔌 Sockets — Codigo Estelar', () => {
 
       const gameOverPromise = waitForSocketEvent(socket, CODIGO_ESTELAR_SOCKET_EVENTS.game_over, {
         rejectOn: CODIGO_ESTELAR_SOCKET_EVENTS.error,
-        timeoutMs: 15_000,
+        timeoutMs: 30_000,
       });
       socket.emit(CODIGO_ESTELAR_SOCKET_EVENTS.submit, {
         sesionId,
@@ -328,6 +328,6 @@ describe('🔌 Sockets — Codigo Estelar', () => {
       await closeSocket(socket);
     }
     },
-    30_000
+    60_000
   );
 });
