@@ -163,6 +163,49 @@ export const assertStudentBelongsToUser = async (studentId, user, trx = db) => {
 };
 
 /**
+ * Verifica el alcance actual para una operacion que revoca acceso en vivo.
+ *
+ * El historial sirve para consultas, pero una recuperacion de dispositivo solo
+ * puede ejecutarla el admin de la institucion o el tutor asignado hoy al grupo.
+ */
+export const assertCurrentStudentBelongsToUser = async (studentId, user, trx = db) => {
+  assertTenantScopedUser(user);
+
+  if (!['admin', 'tutor'].includes(user.rol)) {
+    throw new AppError('Rol sin permisos para recuperar sesiones de estudiantes', 403);
+  }
+
+  const query = withActiveGroupHistory(
+    trx('estudiantes').where('estudiantes.id_estudiante', studentId)
+  )
+    .leftJoin('grupos', 'grupos.id_grupo', 'egh.grupo_id')
+    .select(
+      'estudiantes.id_estudiante',
+      'estudiantes.nombre',
+      'estudiantes.institucion_id',
+      'egh.grupo_id',
+      'grupos.tutor_asignado_id',
+      'grupos.activo as grupo_activo'
+    );
+
+  query.where('estudiantes.institucion_id', user.institucion_id);
+
+  if (user.rol === 'tutor') {
+    query
+      .where('grupos.institucion_id', user.institucion_id)
+      .where('grupos.tutor_asignado_id', user.id)
+      .where('grupos.activo', true);
+  }
+
+  const student = await query.first();
+  if (!student) {
+    throw new AppError('Estudiante no encontrado o sin permisos actuales', 403);
+  }
+
+  return student;
+};
+
+/**
  * Verifica que una sesión pertenezca a un estudiante visible para el usuario.
  */
 export const assertSessionBelongsToUser = async (sessionId, user, trx = db) => {

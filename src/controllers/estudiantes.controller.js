@@ -4,8 +4,36 @@ import { ok, created, noContent } from '../utils/response.js';
 
 export const loginEstudiante = async (req, res, next) => {
   try {
-    const data = await svc.loginEstudiante(req.body.qr_token);
+    const data = await svc.loginEstudiante(req.body, { ip: req.ip });
     ok(res, data, 'Sesión de estudiante iniciada correctamente');
+  } catch (e) { next(e); }
+};
+
+export const logoutEstudiante = async (req, res, next) => {
+  try {
+    const data = await svc.logoutEstudiante(req.estudiante.device_session_id);
+    ok(res, data, 'Sesión de dispositivo cerrada correctamente');
+  } catch (e) { next(e); }
+};
+
+export const obtenerSesionDispositivoActiva = async (req, res, next) => {
+  try {
+    const data = await svc.obtenerSesionDispositivoActiva(Number(req.params.id), req.user);
+    const message = data.tiene_dispositivo_activo
+      ? 'Sesion de dispositivo obtenida correctamente'
+      : 'El estudiante no tiene una sesion de dispositivo activa';
+    ok(res, data, message);
+  } catch (e) { next(e); }
+};
+
+export const recuperarSesionDispositivo = async (req, res, next) => {
+  try {
+    const data = await svc.recuperarSesionDispositivo(
+      Number(req.params.id),
+      req.user,
+      req.body.action
+    );
+    ok(res, data, 'Acceso recuperado y actividad actual reiniciada correctamente');
   } catch (e) { next(e); }
 };
 
