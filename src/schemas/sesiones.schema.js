@@ -1,7 +1,16 @@
 import { z } from 'zod';
 
+const idempotencyKeySchema = z
+  .string()
+  .trim()
+  .min(8, 'La clave idempotente es demasiado corta')
+  .max(128, 'La clave idempotente es demasiado larga')
+  .optional();
+
 /** POST /api/sesiones/iniciar */
 export const iniciarSesionSchema = z.object({
+  attempt_id: idempotencyKeySchema,
+
   minijuego_id: z
     .number({ invalid_type_error: 'El ID del minijuego debe ser un número' })
     .int()
@@ -18,6 +27,13 @@ export const iniciarSesionSchema = z.object({
 
 /** POST /api/sesiones/:id/eventos */
 export const registrarEventoSchema = z.object({
+  event_id: idempotencyKeySchema,
+  sequence: z
+    .number({ invalid_type_error: 'La secuencia debe ser un numero' })
+    .int()
+    .positive('La secuencia debe ser positiva')
+    .optional(),
+
   tipo_evento: z
     .string({ required_error: 'El tipo de evento es obligatorio' })
     .trim()
@@ -53,6 +69,8 @@ export const registrarEventoSchema = z.object({
 
 /** POST /api/sesiones/:id/finalizar */
 export const finalizarSesionSchema = z.object({
+  finalization_id: idempotencyKeySchema,
+
   puntaje: z
     .number({ invalid_type_error: 'El puntaje debe ser un número' })
     .min(0, 'El puntaje no puede ser negativo')
@@ -89,4 +107,20 @@ export const finalizarSesionSchema = z.object({
       invalid_type_error: 'El estado no es válido',
     })
     .optional(),
+});
+
+export const guardarCheckpointSchema = z.object({
+  expected_version: z
+    .number({
+      required_error: 'La versión esperada es obligatoria',
+      invalid_type_error: 'La versión esperada debe ser un número',
+    })
+    .int()
+    .min(0, 'La versión esperada no puede ser negativa'),
+  state: z
+    .record(z.any(), { required_error: 'El estado del checkpoint es obligatorio' })
+    .refine(
+      (value) => Buffer.byteLength(JSON.stringify(value), 'utf8') <= 64 * 1024,
+      'El checkpoint no puede superar 64 KB'
+    ),
 });

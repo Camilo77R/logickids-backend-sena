@@ -6,6 +6,7 @@ import {
   iniciarSesionSchema,
   registrarEventoSchema,
   finalizarSesionSchema,
+  guardarCheckpointSchema,
 } from '../schemas/sesiones.schema.js';
 
 const router = Router();
@@ -14,6 +15,13 @@ const router = Router();
 router.post('/iniciar',        requireEstudiante, validate(iniciarSesionSchema),    ctrl.iniciar);
 router.post('/:id/eventos',    requireEstudiante, validate(registrarEventoSchema),  ctrl.registrarEvento);
 router.post('/:id/finalizar',  requireEstudiante, validate(finalizarSesionSchema),  ctrl.finalizar);
+router.get('/:id/checkpoint',  requireEstudiante, ctrl.obtenerCheckpoint);
+router.put(
+  '/:id/checkpoint',
+  requireEstudiante,
+  validate(guardarCheckpointSchema),
+  ctrl.guardarCheckpoint
+);
 router.get('/mis-sesiones',    requireEstudiante, ctrl.miHistorial);
 
 // Rutas usadas por adultos con alcance institucional/pedagógico

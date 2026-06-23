@@ -7,6 +7,18 @@ export const loginEstudianteSchema = z.object({
     .trim()
     .min(6, 'El QR token debe tener al menos 6 caracteres')
     .max(120, 'El QR token no puede superar 120 caracteres'),
+  installation_id: z
+    .string({ required_error: 'El identificador de instalación es obligatorio' })
+    .trim()
+    .min(8, 'El identificador de instalación es demasiado corto')
+    .max(128, 'El identificador de instalación es demasiado largo'),
+  app_version: z.string().trim().max(50).optional().nullable(),
+});
+
+export const recuperarSesionDispositivoSchema = z.object({
+  action: z.literal('restart_current_activity', {
+    errorMap: () => ({ message: 'La accion de recuperacion no es valida' }),
+  }),
 });
 
 /** POST /api/estudiantes — crear estudiante */

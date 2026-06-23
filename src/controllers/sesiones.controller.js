@@ -48,3 +48,21 @@ export const detalleEventos = async (req, res, next) => {
     ok(res, data, 'Detalle de eventos obtenido correctamente');
   } catch (e) { next(e); }
 };
+
+export const obtenerCheckpoint = async (req, res, next) => {
+  try {
+    const data = await svc.obtenerCheckpoint(Number(req.params.id), req.estudiante.id);
+    ok(res, data, 'Checkpoint obtenido correctamente');
+  } catch (e) { next(e); }
+};
+
+export const guardarCheckpoint = async (req, res, next) => {
+  try {
+    const data = await svc.guardarCheckpoint(
+      Number(req.params.id),
+      req.estudiante.id,
+      req.body
+    );
+    ok(res, data, 'Checkpoint guardado correctamente');
+  } catch (e) { next(e); }
+};
