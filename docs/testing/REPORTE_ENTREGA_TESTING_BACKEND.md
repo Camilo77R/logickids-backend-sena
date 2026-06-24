@@ -30,13 +30,16 @@ Resultado:
 
 ## Que se subio
 
-Se subio un commit en la rama `TEST-PRUEBAS-BACKEND-COMPLETA`:
+Se subieron estos commits en la rama `TEST-PRUEBAS-BACKEND-COMPLETA`:
 
 ```text
 ee6cad8 test: cerrar pruebas backend por capas
+75ed71e docs: agregar reporte de entrega testing backend
+55ae603 docs: agregar monitor de calidad de agentes
+806040f docs: mejorar guia de testing por capas para equipo
 ```
 
-El commit incluye:
+La rama incluye:
 
 1. pruebas backend nuevas y estabilizadas
 2. scripts para ejecutar pruebas por capa
@@ -44,6 +47,8 @@ El commit incluye:
 4. documentacion oficial en `docs/testing`
 5. agentes de apoyo en `.agents`
 6. evidencia de cierre por capas
+7. guia explicada para que el equipo adapte el metodo a backend, frontend o movil
+8. agente monitor para auditar que los demas agentes cumplan con evidencia
 
 ## Donde quedo cada cosa
 
@@ -78,6 +83,7 @@ docs/testing/REPORTE_ENTREGA_TESTING_BACKEND.md
 .agents/backend-limpieza-segura-revisor.md
 .agents/backend-documentador-oficial.md
 .agents/backend-sync-develop-integrador.md
+.agents/backend-monitor-calidad-agentes.md
 ```
 
 ### Tests nuevos principales
@@ -259,6 +265,16 @@ probado y verde.
 
 Cuando llegan cambios de `develop`, revisa nuevos modulos, reglas o endpoints,
 resuelve conflictos con cuidado y actualiza pruebas/documentacion si aplica.
+
+### Monitor de calidad de agentes
+
+Audita que los demas agentes cumplan con evidencia real. Revisa especialmente:
+
+1. que el documentador oficial mantenga los MD actualizados
+2. que el integrador de `develop` detecte modulos, reglas, conflictos y pruebas afectadas
+3. que tests y configuracion sean coherentes
+4. que no se apruebe una capa sin comandos verdes
+5. que el estado sea `APROBADO`, `APROBADO CON OBSERVACIONES`, `REQUIERE AJUSTES` o `BLOQUEADO`
 
 ## Que falta
 
