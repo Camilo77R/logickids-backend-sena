@@ -17,6 +17,41 @@
 
 ---
 
+## Testing Backend por Capas
+
+La rama `TEST-PRUEBAS-BACKEND-COMPLETA` documenta y estabiliza las pruebas
+automatizadas del backend con `Vitest`.
+
+Estado verificado el `2026-06-24`:
+
+1. `99/99` pruebas pasando
+2. `15/15` archivos de prueba pasando
+3. `6/6` capas cerradas
+
+Comandos principales:
+
+```bash
+npm run test:capa1
+npm run test:capa2
+npm run test:capa3
+npm run test:capa4
+npm run test:capa5
+npm run test:capa6
+npm run test:backend:full
+```
+
+Documentacion oficial:
+
+1. `docs/testing/README.md`
+2. `docs/testing/ESTADO_CAPAS_BACKEND.md`
+3. `docs/testing/GUIA_PRACTICAS_TESTING_POR_CAPAS.md`
+4. `docs/testing/MODULOS_REGLAS_CASOS_COBERTURA.md`
+5. `docs/testing/AGENTES_TESTING_BACKEND.md`
+
+Autores del trabajo de testing backend: Sebastian Cardona y Camilo Rivillas.
+
+---
+
 ## Configuracion
 
 ```bash

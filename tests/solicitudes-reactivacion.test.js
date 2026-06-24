@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import app from '../src/app.js';
 import { db } from '../src/config/db.js';
+import { env } from '../src/config/env.js';
 import { getSuperadminToken, loginAs } from './helpers/auth.helper.js';
 import {
   buildTestInstitutionName,
@@ -9,6 +10,32 @@ import {
 } from './helpers/testFixtures.helper.js';
 
 const authHeader = (token) => ({ Authorization: `Bearer ${token}` });
+
+const withEmailDisabled = async (run) => {
+  const originalConfig = {
+    EMAIL_HOST: env.EMAIL_HOST,
+    EMAIL_PORT: env.EMAIL_PORT,
+    EMAIL_USER: env.EMAIL_USER,
+    EMAIL_PASS: env.EMAIL_PASS,
+    EMAIL_FROM: env.EMAIL_FROM,
+  };
+
+  env.EMAIL_HOST = undefined;
+  env.EMAIL_PORT = undefined;
+  env.EMAIL_USER = undefined;
+  env.EMAIL_PASS = undefined;
+  env.EMAIL_FROM = undefined;
+
+  try {
+    return await run();
+  } finally {
+    env.EMAIL_HOST = originalConfig.EMAIL_HOST;
+    env.EMAIL_PORT = originalConfig.EMAIL_PORT;
+    env.EMAIL_USER = originalConfig.EMAIL_USER;
+    env.EMAIL_PASS = originalConfig.EMAIL_PASS;
+    env.EMAIL_FROM = originalConfig.EMAIL_FROM;
+  }
+};
 
 const buildSuffix = (label = 'solicitudes') =>
   `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -169,4 +196,76 @@ describe('📝 Solicitudes de reactivación', () => {
     expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.data.some((solicitud) => solicitud.tutor_email === fixture.tutorEmail)).toBe(true);
   });
+
+  it('✅ aprobar una solicitud reactiva al tutor suspendido y evita reprocesarla', async () => {
+    await withEmailDisabled(async () => {
+      const fixture = await provisionSuspendedTutor();
+
+      const createRes = await request(app)
+        .post('/api/solicitudes/reactivacion')
+        .send({
+          email: fixture.tutorEmail,
+          motivo: 'Necesito recuperar mi acceso para continuar con mis grupos',
+        });
+
+      expect(createRes.status).toBe(201);
+      const solicitudId = createRes.body.data.solicitud.id;
+
+      const approveRes = await request(app)
+        .put(`/api/solicitudes/admin/solicitudes/${solicitudId}/aprobar`)
+        .set(authHeader(fixture.adminToken));
+
+      expect(approveRes.status).toBe(200);
+      expect(approveRes.body.success).toBe(true);
+      expect(approveRes.body.data.estado).toBe('aprobado');
+
+      const restoredLogin = await request(app)
+        .post('/api/auth/login')
+        .send({ email: fixture.tutorEmail, contrasena: 'TutorPass123!' });
+
+      expect(restoredLogin.status).toBe(200);
+      expect(restoredLogin.body.success).toBe(true);
+
+      const secondApproveRes = await request(app)
+        .put(`/api/solicitudes/admin/solicitudes/${solicitudId}/aprobar`)
+        .set(authHeader(fixture.adminToken));
+
+      expect(secondApproveRes.status).toBe(409);
+      expect(secondApproveRes.body.success).toBe(false);
+    });
+  }, 30000);
+
+  it('✅ rechazar una solicitud la deja cerrada y mantiene bloqueado el login del tutor', async () => {
+    await withEmailDisabled(async () => {
+      const fixture = await provisionSuspendedTutor();
+
+      const createRes = await request(app)
+        .post('/api/solicitudes/reactivacion')
+        .send({
+          email: fixture.tutorEmail,
+          motivo: 'Necesito recuperar mi acceso para continuar con mis grupos',
+        });
+
+      expect(createRes.status).toBe(201);
+      const solicitudId = createRes.body.data.solicitud.id;
+
+      const rejectRes = await request(app)
+        .put(`/api/solicitudes/admin/solicitudes/${solicitudId}/rechazar`)
+        .set(authHeader(fixture.adminToken))
+        .send({
+          motivo_rechazo: 'La revisión institucional sigue pendiente',
+        });
+
+      expect(rejectRes.status).toBe(200);
+      expect(rejectRes.body.success).toBe(true);
+      expect(rejectRes.body.data.estado).toBe('rechazado');
+
+      const blockedLogin = await request(app)
+        .post('/api/auth/login')
+        .send({ email: fixture.tutorEmail, contrasena: 'TutorPass123!' });
+
+      expect(blockedLogin.status).toBe(403);
+      expect(blockedLogin.body.success).toBe(false);
+    });
+  }, 30000);
 });

@@ -300,4 +300,232 @@ describe('🏫 Modelo institución-céntrico', () => {
       })
     ).rejects.toMatchObject({ code: '23505' });
   });
+
+  it('✅ archivar y restaurar un grupo cambia su estado de vida y evita transiciones inválidas', async () => {
+    const fixture = await provisionPlayableStudent({
+      suffix: buildCodigoEstelarSuffix('archive-restore-group'),
+      openClass: false,
+    });
+
+    const archiveRes = await request(app)
+      .patch(`/api/grupos/${fixture.groupId}/archivar`)
+      .set(authHeader(fixture.adminToken));
+
+    expect(archiveRes.status).toBe(200);
+    expect(archiveRes.body.success).toBe(true);
+    expect(archiveRes.body.data.activo).toBe(false);
+
+    const secondArchiveRes = await request(app)
+      .patch(`/api/grupos/${fixture.groupId}/archivar`)
+      .set(authHeader(fixture.adminToken));
+
+    expect(secondArchiveRes.status).toBe(409);
+    expect(secondArchiveRes.body.success).toBe(false);
+
+    const restoreRes = await request(app)
+      .patch(`/api/grupos/${fixture.groupId}/restaurar`)
+      .set(authHeader(fixture.adminToken));
+
+    expect(restoreRes.status).toBe(200);
+    expect(restoreRes.body.success).toBe(true);
+    expect(restoreRes.body.data.activo).toBe(true);
+
+    const secondRestoreRes = await request(app)
+      .patch(`/api/grupos/${fixture.groupId}/restaurar`)
+      .set(authHeader(fixture.adminToken));
+
+    expect(secondRestoreRes.status).toBe(409);
+    expect(secondRestoreRes.body.success).toBe(false);
+  });
+
+  it('✅ desactivar y reactivar un estudiante respeta su ciclo de vida y bloquea transiciones inválidas', async () => {
+    const fixture = await provisionPlayableStudent({
+      suffix: buildCodigoEstelarSuffix('student-lifecycle'),
+      openClass: false,
+    });
+
+    const deactivateRes = await request(app)
+      .delete(`/api/estudiantes/${fixture.studentId}`)
+      .set(authHeader(fixture.adminToken));
+
+    expect(deactivateRes.status).toBe(204);
+
+    const secondDeactivateRes = await request(app)
+      .delete(`/api/estudiantes/${fixture.studentId}`)
+      .set(authHeader(fixture.adminToken));
+
+    expect(secondDeactivateRes.status).toBe(409);
+    expect(secondDeactivateRes.body.success).toBe(false);
+
+    const reactivateRes = await request(app)
+      .patch(`/api/estudiantes/${fixture.studentId}/reactivar`)
+      .set(authHeader(fixture.adminToken));
+
+    expect(reactivateRes.status).toBe(200);
+    expect(reactivateRes.body.success).toBe(true);
+    expect(reactivateRes.body.message).toBe('Estudiante reactivado correctamente');
+
+    const secondReactivateRes = await request(app)
+      .patch(`/api/estudiantes/${fixture.studentId}/reactivar`)
+      .set(authHeader(fixture.adminToken));
+
+    expect(secondReactivateRes.status).toBe(409);
+    expect(secondReactivateRes.body.success).toBe(false);
+  });
+
+  it('✅ el admin no puede cambiar su propio estado administrativo y un admin auxiliar no puede suspender a otro admin', async () => {
+    const suffix = buildCodigoEstelarSuffix('admin-state-rules');
+    const { adminToken } = await createInstitutionWithPrincipalAdmin(suffix);
+
+    const createSecondAdminRes = await request(app)
+      .post('/api/admin/usuarios/admins')
+      .set(authHeader(adminToken))
+      .send({
+        nombre: `Admin Auxiliar ${suffix}`,
+        email: `aux.state.${suffix}@logickids.dev`,
+      });
+
+    expect(createSecondAdminRes.status).toBe(201);
+    const auxiliarId = createSecondAdminRes.body.data.id;
+    const auxiliarPassword = createSecondAdminRes.body.data.contrasena_temporal;
+
+    const adminSelfStateRes = await request(app)
+      .get('/api/admin/usuarios?rol=admin')
+      .set(authHeader(adminToken));
+
+    expect(adminSelfStateRes.status).toBe(200);
+    const principalAdmin = adminSelfStateRes.body.data.find((user) => user.es_admin_principal === true);
+    expect(principalAdmin).toBeTruthy();
+
+    const selfSuspendRes = await request(app)
+      .patch(`/api/admin/usuarios/${principalAdmin.id}/estado`)
+      .set(authHeader(adminToken))
+      .send({ estado: 'suspendido' });
+
+    expect(selfSuspendRes.status).toBe(403);
+    expect(selfSuspendRes.body.success).toBe(false);
+
+    const auxiliarToken = await loginAs(
+      `aux.state.${suffix}@logickids.dev`,
+      auxiliarPassword
+    );
+
+    const suspendPrincipalRes = await request(app)
+      .patch(`/api/admin/usuarios/${principalAdmin.id}/estado`)
+      .set(authHeader(auxiliarToken))
+      .send({ estado: 'suspendido' });
+
+    expect(suspendPrincipalRes.status).toBe(403);
+    expect(suspendPrincipalRes.body.success).toBe(false);
+
+    const suspendAuxiliarRes = await request(app)
+      .patch(`/api/admin/usuarios/${auxiliarId}/estado`)
+      .set(authHeader(adminToken))
+      .send({ estado: 'suspendido' });
+
+    expect(suspendAuxiliarRes.status).toBe(200);
+    expect(suspendAuxiliarRes.body.success).toBe(true);
+    expect(suspendAuxiliarRes.body.data.estado).toBe('suspendido');
+  });
+
+  it('✅ suspender y reactivar un tutor cambia su acceso real a la plataforma', async () => {
+    const suffix = buildCodigoEstelarSuffix('tutor-state-cycle');
+    const { adminToken } = await createInstitutionWithPrincipalAdmin(suffix);
+
+    const tutorEmail = `tutor.state.${suffix}@logickids.dev`;
+    const createTutorRes = await request(app)
+      .post('/api/admin/usuarios/tutores')
+      .set(authHeader(adminToken))
+      .send({
+        nombre: `Tutor Estado ${suffix}`,
+        email: tutorEmail,
+      });
+
+    expect(createTutorRes.status).toBe(201);
+    const tutorId = createTutorRes.body.data.id;
+    const tutorPassword = createTutorRes.body.data.contrasena_temporal;
+
+    const firstLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: tutorEmail, contrasena: tutorPassword });
+
+    expect(firstLogin.status).toBe(200);
+    expect(firstLogin.body.success).toBe(true);
+
+    const suspendRes = await request(app)
+      .patch(`/api/admin/usuarios/${tutorId}/estado`)
+      .set(authHeader(adminToken))
+      .send({ estado: 'suspendido' });
+
+    expect(suspendRes.status).toBe(200);
+    expect(suspendRes.body.success).toBe(true);
+    expect(suspendRes.body.data.estado).toBe('suspendido');
+
+    const blockedLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: tutorEmail, contrasena: tutorPassword });
+
+    expect(blockedLogin.status).toBe(403);
+    expect(blockedLogin.body.success).toBe(false);
+    expect(blockedLogin.body.estado).toBe('suspendido');
+
+    const reactivateRes = await request(app)
+      .patch(`/api/admin/usuarios/${tutorId}/estado`)
+      .set(authHeader(adminToken))
+      .send({ estado: 'activo' });
+
+    expect(reactivateRes.status).toBe(200);
+    expect(reactivateRes.body.success).toBe(true);
+    expect(reactivateRes.body.data.estado).toBe('activo');
+
+    const restoredLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: tutorEmail, contrasena: tutorPassword });
+
+    expect(restoredLogin.status).toBe(200);
+    expect(restoredLogin.body.success).toBe(true);
+  });
+
+  it('✅ no permite asignar a un grupo un tutor suspendido', async () => {
+    const suffix = buildCodigoEstelarSuffix('suspended-tutor-group');
+    const { adminToken } = await createInstitutionWithPrincipalAdmin(suffix);
+
+    const tutorEmail = `tutor.blocked.${suffix}@logickids.dev`;
+    const createTutorRes = await request(app)
+      .post('/api/admin/usuarios/tutores')
+      .set(authHeader(adminToken))
+      .send({
+        nombre: `Tutor Bloqueado ${suffix}`,
+        email: tutorEmail,
+      });
+
+    expect(createTutorRes.status).toBe(201);
+    const tutorId = createTutorRes.body.data.id;
+
+    const suspendRes = await request(app)
+      .patch(`/api/admin/usuarios/${tutorId}/estado`)
+      .set(authHeader(adminToken))
+      .send({ estado: 'suspendido' });
+
+    expect(suspendRes.status).toBe(200);
+
+    const createGroupRes = await request(app)
+      .post('/api/grupos')
+      .set(authHeader(adminToken))
+      .send({
+        nombre: `Grupo sin tutor ${suffix}`,
+        descripcion: 'Grupo para validar tutor suspendido',
+      });
+
+    expect(createGroupRes.status).toBe(201);
+    const groupId = createGroupRes.body.data.id;
+
+    const assignRes = await request(app)
+      .patch(`/api/grupos/${groupId}/tutor`)
+      .set(authHeader(adminToken))
+      .send({ tutor_id: tutorId });
+
+    expect(assignRes.status).toBe(409);
+    expect(assignRes.body.success).toBe(false);
+  });
 });

@@ -130,3 +130,54 @@ export const cleanupRegisteredTestInstitutions = async () => {
   await deleteTestInstitutionsByIds(institutionIds);
   institutionIds.forEach((institutionId) => registeredInstitutionIds.delete(institutionId));
 };
+
+export const normalizeOfficialCatalogFixtures = async () => {
+  await db.transaction(async (trx) => {
+    const officialRoute = await trx('rutas_pedagogicas')
+      .where({ slug: 'ruta-completa-habilidades' })
+      .select('id_ruta_pedagogica')
+      .first();
+
+    if (!officialRoute) {
+      return;
+    }
+
+    const legacyGame = await trx('minijuegos')
+      .where({ slug: 'objeto-perdido' })
+      .select('id_minijuego')
+      .first();
+
+    const arGame = await trx('minijuegos')
+      .where({ slug: 'objeto-perdido-ar' })
+      .select('id_minijuego')
+      .first();
+
+    if (!arGame) {
+      return;
+    }
+
+    await trx('minijuegos')
+      .where({ id_minijuego: arGame.id_minijuego })
+      .update({
+        activo: true,
+        visible_en_catalogo: true,
+        orden_catalogo: 5,
+      });
+
+    if (legacyGame) {
+      await trx('minijuegos')
+        .where({ id_minijuego: legacyGame.id_minijuego })
+        .update({
+          activo: false,
+          visible_en_catalogo: false,
+        });
+
+      await trx('ruta_pedagogica_bloques')
+        .where({
+          ruta_pedagogica_id: officialRoute.id_ruta_pedagogica,
+          minijuego_id: legacyGame.id_minijuego,
+        })
+        .update({ minijuego_id: arGame.id_minijuego });
+    }
+  });
+};

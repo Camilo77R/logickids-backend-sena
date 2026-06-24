@@ -140,4 +140,52 @@ describe('🔄 Ciclo de vida — instituciones activas e inactivas', () => {
     expect(restoredLogin.status).toBe(200);
     expect(restoredLogin.body.success).toBe(true);
   });
+
+  it('❌ rechaza desactivar una institución que ya está desactivada', async () => {
+    const superToken = await getSuperadminToken();
+    const payload = buildInstitutionPayload(`already-off-${Date.now()}`);
+
+    const createRes = await request(app)
+      .post('/api/admin/instituciones')
+      .set('Authorization', `Bearer ${superToken}`)
+      .send(payload);
+
+    expect(createRes.status).toBe(201);
+    const institutionId = createRes.body.data.institucion.id;
+    registerTestInstitution(institutionId);
+
+    const firstDeactivateRes = await request(app)
+      .patch(`/api/admin/instituciones/${institutionId}/desactivar`)
+      .set('Authorization', `Bearer ${superToken}`);
+
+    expect(firstDeactivateRes.status).toBe(200);
+
+    const secondDeactivateRes = await request(app)
+      .patch(`/api/admin/instituciones/${institutionId}/desactivar`)
+      .set('Authorization', `Bearer ${superToken}`);
+
+    expect(secondDeactivateRes.status).toBe(409);
+    expect(secondDeactivateRes.body.success).toBe(false);
+  });
+
+  it('❌ rechaza reactivar una institución que ya está activa', async () => {
+    const superToken = await getSuperadminToken();
+    const payload = buildInstitutionPayload(`already-on-${Date.now()}`);
+
+    const createRes = await request(app)
+      .post('/api/admin/instituciones')
+      .set('Authorization', `Bearer ${superToken}`)
+      .send(payload);
+
+    expect(createRes.status).toBe(201);
+    const institutionId = createRes.body.data.institucion.id;
+    registerTestInstitution(institutionId);
+
+    const reactivateRes = await request(app)
+      .patch(`/api/admin/instituciones/${institutionId}/reactivar`)
+      .set('Authorization', `Bearer ${superToken}`);
+
+    expect(reactivateRes.status).toBe(409);
+    expect(reactivateRes.body.success).toBe(false);
+  });
 });

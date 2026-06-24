@@ -425,4 +425,58 @@ describe('🏆 Ranking oficial y realtime', () => {
     },
     45_000
   );
+
+  it(
+    '✅ el tutor conectado por socket recibe cierre automatico de la clase cuando finaliza el ultimo participante',
+    async () => {
+      const minijuegoId = await resolveCodigoEstelarId();
+      const fixture = await provisionPlayableStudent({ openClass: false });
+      const socket = createRealtimeSocket(socketBaseUrl, fixture.tutorToken);
+
+      try {
+        await waitForSocketEvent(socket, 'connect', { rejectOn: 'connect_error' });
+
+        await openSingleClass({
+          tutorToken: fixture.tutorToken,
+          groupId: fixture.groupId,
+          minijuegoId,
+          niveles: 1,
+        });
+
+        const startRes = await startCodigoEstelarSession({
+          studentToken: fixture.studentToken,
+          minijuegoId,
+          dificultad: 2,
+        });
+
+        expect(startRes.status).toBe(201);
+
+        const rankingUpdatedPromise = waitForSocketEvent(socket, 'ranking:updated');
+        const classChangedPromise = waitForSocketEvent(socket, 'class_session:changed');
+
+        await registerEventsAndFinalize({
+          studentToken: fixture.studentToken,
+          sessionId: startRes.body.data.sesion.id,
+          events: [
+            { tipo_evento: 'acierto', puntos: 12, combo_en_evento: 1 },
+          ],
+        });
+
+        const rankingUpdated = await rankingUpdatedPromise;
+        const classChanged = await classChangedPromise;
+
+        expect(rankingUpdated.grupoId).toBe(fixture.groupId);
+        expect(rankingUpdated.studentId).toBe(fixture.studentId);
+        expect(rankingUpdated.reason).toBe('session_finalized');
+
+        expect(classChanged.grupoId).toBe(fixture.groupId);
+        expect(classChanged.studentId).toBe(fixture.studentId);
+        expect(classChanged.sessionState).toBe('cerrada');
+        expect(classChanged.reason).toBe('finalizada');
+      } finally {
+        await closeSocket(socket);
+      }
+    },
+    45_000
+  );
 });

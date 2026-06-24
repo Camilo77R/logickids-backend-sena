@@ -20,7 +20,7 @@ describe('🧭 Catálogo pedagógico oficial', () => {
       'tren-figuras',
       'robot-logico',
       'mercado-inteligente',
-      'objeto-perdido',
+      'objeto-perdido-ar',
     ]);
 
     expect(slugs).not.toContain('codigo-estelar');
@@ -49,7 +49,7 @@ describe('🧭 Catálogo pedagógico oficial', () => {
       'tren-figuras',
       'robot-logico',
       'mercado-inteligente',
-      'objeto-perdido',
+      'objeto-perdido-ar',
     ]);
     expect(officialRoute.bloques.every((block) => block.niveles === 1)).toBe(true);
   });
@@ -68,7 +68,7 @@ describe('🧭 Catálogo pedagógico oficial', () => {
     expect([...slugs].sort()).toEqual([
       'camino-ar',
       'mercado-inteligente',
-      'objeto-perdido',
+      'objeto-perdido-ar',
       'robot-logico',
       'tren-figuras',
     ].sort());
