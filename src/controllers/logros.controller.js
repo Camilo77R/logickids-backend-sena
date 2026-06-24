@@ -40,6 +40,13 @@ export const misLogros = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const resumen = async (req, res, next) => {
+  try {
+    const data = await svc.resumenEstudiante(req.estudiante.id);
+    ok(res, data, 'Resumen de logros obtenido correctamente');
+  } catch (e) { next(e); }
+};
+
 export const listar = async (req, res, next) => {
   try {
     const data = await svc.listar(Number(req.params.id), req.user);

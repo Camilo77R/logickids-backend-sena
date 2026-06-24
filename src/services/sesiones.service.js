@@ -542,9 +542,9 @@ const finalizarSesionInterna = async (
   const logros_desbloqueados = await evaluarLogrosSesion(
     estudiante_id,
     {
+      sesion_id,
       aciertos: officialSummary.aciertos,
       errores: officialSummary.errores,
-      combo_maximo: officialSummary.combo_maximo,
       estado,
     },
     executor
