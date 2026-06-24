@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import app from '../../src/app.js';
 import { db } from '../../src/config/db.js';
@@ -49,6 +50,8 @@ export const resolveRutaPedagogicaIdBySlug = async (slug) => {
  */
 export const provisionPlayableStudent = async ({
   openClass = true,
+  loginStudent = true,
+  installationId = randomUUID(),
   suffix = buildCodigoEstelarSuffix(),
 } = {}) => {
   const superToken = await getSuperadminToken();
@@ -159,11 +162,17 @@ export const provisionPlayableStudent = async ({
     throw new Error(`No se pudo obtener el QR del estudiante: ${JSON.stringify(qrRes.body)}`);
   }
 
-  const studentLoginRes = await request(app)
-    .post('/api/estudiantes/login')
-    .send({ qr_token: qrRes.body.data.qr_token });
+  const studentLoginRes = loginStudent
+    ? await request(app)
+        .post('/api/estudiantes/login')
+        .send({
+          qr_token: qrRes.body.data.qr_token,
+          installation_id: installationId,
+          app_version: 'test',
+        })
+    : null;
 
-  if (studentLoginRes.status !== 200) {
+  if (studentLoginRes && studentLoginRes.status !== 200) {
     throw new Error(`No se pudo loguear al estudiante: ${JSON.stringify(studentLoginRes.body)}`);
   }
 
@@ -171,7 +180,9 @@ export const provisionPlayableStudent = async ({
     superToken,
     adminToken,
     tutorToken,
-    studentToken: studentLoginRes.body.data.token,
+    studentToken: studentLoginRes?.body.data.token ?? null,
+    qrToken: qrRes.body.data.qr_token,
+    installationId,
     institutionId,
     groupId,
     tutorId,

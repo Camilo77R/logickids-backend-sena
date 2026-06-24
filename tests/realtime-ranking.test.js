@@ -104,7 +104,11 @@ const createStudentForExistingGroup = async ({
 
   const loginRes = await request(app)
     .post('/api/estudiantes/login')
-    .send({ qr_token: qrRes.body.data.qr_token });
+    .send({
+      qr_token: qrRes.body.data.qr_token,
+      installation_id: `ranking-${suffix}`,
+      app_version: 'test',
+    });
 
   expect(loginRes.status).toBe(200);
 

@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import {
   applyStudentOwnershipScope,
+  assertCurrentStudentBelongsToUser,
   assertGroupBelongsToUser,
   assertStudentBelongsToUser,
   withActiveGroupHistory,
@@ -16,6 +17,15 @@ import {
 import { finalizar } from './sesiones.service.js';
 import { randomCode } from '../utils/codes.js';
 import { publishStudentAccessChanged } from '../realtime/realtime.events.js';
+import {
+  clearStudentLoginRateLimit,
+  createOrReuseStudentDeviceSession,
+  recordStudentLoginAttempt,
+  resolveActiveStudentDeviceSession,
+  revokeAllStudentDeviceSessions,
+  revokeStudentDeviceSession,
+  STUDENT_SESSION_TTL_SECONDS,
+} from './student-device-session.service.js';
 
 const SESION_ACTIVA_STUDENT_RAW = db.raw(`
   EXISTS (
@@ -198,29 +208,264 @@ const generateUniqueQR = async () => {
  * Autentica a un estudiante mediante su QR token.
  * Emite un JWT firmado con JWT_STUDENT_SECRET (diferente al de tutores).
  */
-export const loginEstudiante = async (qr_token) => {
-  const est = await buildBaseStudentRow()
-    .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
-    .where('estudiantes.qr_token', qr_token)
-    .select('estudiantes.qr_token', 'instituciones.activo as institucion_activa')
-    .first();
+export const loginEstudiante = async (
+  { qr_token, installation_id, app_version },
+  { ip = 'unknown' } = {}
+) => {
+  const rateLimitKeys = await recordStudentLoginAttempt({
+    ip,
+    installationId: installation_id,
+  });
 
-  if (!est) throw new AppError('QR inválido', 404);
-  if (est.estado !== 'activo') throw new AppError('Estudiante inactivo', 403);
-  if (est.institucion_activa === false) {
-    throw new AppError('La institución del estudiante está desactivada', 403);
-  }
+  const loginResult = await db.transaction(async (trx) => {
+    const identity = await trx('estudiantes')
+      .where({ qr_token })
+      .select('id_estudiante')
+      .forUpdate()
+      .first();
 
-  const perfil = await enrichStudentWithActiveSession(est);
+    if (!identity) {
+      throw new AppError('QR inválido', 404, { code: 'STUDENT_QR_INVALID' });
+    }
 
-  const token = jwt.sign(
-    { id: perfil.id, nombre: perfil.nombre, grupo_id: perfil.grupo_id },
-    env.JWT_STUDENT_SECRET,
-    { expiresIn: env.JWT_STUDENT_EXPIRES_IN }
-  );
+    const est = await buildBaseStudentRow(trx)
+      .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
+      .where('estudiantes.id_estudiante', identity.id_estudiante)
+      .select('estudiantes.qr_token', 'instituciones.activo as institucion_activa')
+      .first();
 
-  const { qr_token: _, ...estudiante } = perfil;
-  return { token, estudiante };
+    if (est.estado !== 'activo') {
+      throw new AppError('Estudiante inactivo', 403, { code: 'STUDENT_INACTIVE' });
+    }
+    if (est.institucion_activa === false) {
+      throw new AppError('La institución del estudiante está desactivada', 403, {
+        code: 'STUDENT_INSTITUTION_INACTIVE',
+      });
+    }
+
+    const perfil = await enrichStudentWithActiveSession(est, trx);
+    const { session, reused } = await createOrReuseStudentDeviceSession(
+      {
+        estudianteId: perfil.id,
+        installationId: installation_id,
+        appVersion: app_version,
+      },
+      trx
+    );
+
+    const token = jwt.sign(
+      {
+        sid: session.id_student_device_session,
+      },
+      env.JWT_STUDENT_SECRET,
+      {
+        algorithm: 'HS256',
+        audience: env.JWT_STUDENT_AUDIENCE,
+        expiresIn: STUDENT_SESSION_TTL_SECONDS,
+        issuer: env.JWT_STUDENT_ISSUER,
+        subject: String(perfil.id),
+      }
+    );
+
+    const { qr_token: _, ...estudiante } = perfil;
+    return {
+      token,
+      estudiante,
+      expires_at: session.expira_en,
+      device_session: {
+        id: session.id_student_device_session,
+        reused,
+      },
+    };
+  });
+
+  await clearStudentLoginRateLimit(rateLimitKeys);
+  return loginResult;
+};
+
+export const logoutEstudiante = async (deviceSessionId) => ({
+  revoked: deviceSessionId
+    ? await revokeStudentDeviceSession(deviceSessionId)
+    : false,
+  legacy: !deviceSessionId,
+});
+
+export const obtenerSesionDispositivoActiva = async (id_estudiante, user) =>
+  db.transaction(async (trx) => {
+    const student = await trx('estudiantes')
+      .where({ id_estudiante })
+      .select('id_estudiante')
+      .forUpdate()
+      .first();
+
+    if (!student) {
+      throw new AppError('Estudiante no encontrado', 404);
+    }
+
+    await assertCurrentStudentBelongsToUser(id_estudiante, user, trx);
+    const deviceSession = await resolveActiveStudentDeviceSession(id_estudiante, trx);
+
+    if (!deviceSession) {
+      return {
+        tiene_dispositivo_activo: false,
+        puede_recuperar: false,
+        dispositivo_activo: null,
+      };
+    }
+
+    const currentActivity = await trx('sesiones_juego as sj')
+      .join('estados_sesion as es', 'es.id_estado_sesion', 'sj.estado_id')
+      .join('minijuegos as m', 'm.id_minijuego', 'sj.minijuego_id')
+      .where({
+        'sj.estudiante_id': id_estudiante,
+        'es.nombre': 'activo',
+      })
+      .select(
+        'm.slug as minijuego_slug',
+        'm.titulo as minijuego_titulo',
+        'sj.iniciada_en'
+      )
+      .orderBy('sj.iniciada_en', 'desc')
+      .first();
+
+    return {
+      tiene_dispositivo_activo: true,
+      puede_recuperar: true,
+      dispositivo_activo: {
+        estado: 'activo',
+        conectado_desde: deviceSession.creada_en,
+        ultima_actividad_en: deviceSession.ultima_actividad_en,
+        actividad_actual: currentActivity
+          ? {
+              minijuego_slug: currentActivity.minijuego_slug,
+              minijuego_titulo: currentActivity.minijuego_titulo,
+              iniciada_en: currentActivity.iniciada_en,
+            }
+          : null,
+      },
+    };
+  });
+
+export const recuperarSesionDispositivo = async (
+  id_estudiante,
+  user,
+  action = 'restart_current_activity'
+) => {
+  const transactionResult = await db.transaction(async (trx) => {
+    const lockedStudent = await trx('estudiantes')
+      .where({ id_estudiante })
+      .select('id_estudiante')
+      .forUpdate()
+      .first();
+
+    if (!lockedStudent) {
+      throw new AppError('Estudiante no encontrado', 404);
+    }
+
+    const student = await assertCurrentStudentBelongsToUser(id_estudiante, user, trx);
+    const activeDeviceSession = await resolveActiveStudentDeviceSession(id_estudiante, trx);
+
+    if (!activeDeviceSession) {
+      throw new AppError('El estudiante no tiene una sesion de dispositivo activa', 409, {
+        code: 'STUDENT_DEVICE_SESSION_NOT_ACTIVE',
+      });
+    }
+
+    const activoId = await trx('estados_sesion')
+      .where({ nombre: 'activo' })
+      .select('id_estado_sesion')
+      .first();
+    const abandonadoId = await trx('estados_sesion')
+      .where({ nombre: 'abandonado' })
+      .select('id_estado_sesion')
+      .first();
+
+    const activeSessions = await trx('sesiones_juego')
+      .where({
+        estudiante_id: id_estudiante,
+        estado_id: activoId.id_estado_sesion,
+      })
+      .select('id_sesion_juego', 'sesion_clase_id')
+      .forUpdate();
+
+    if (activeSessions.length) {
+      await trx('sesiones_juego')
+        .whereIn(
+          'id_sesion_juego',
+          activeSessions.map(({ id_sesion_juego }) => id_sesion_juego)
+        )
+        .update({
+          estado_id: abandonadoId.id_estado_sesion,
+          finalizada_en: trx.fn.now(),
+          recuperada_en: trx.fn.now(),
+          recuperada_por_usuario_id: user.id,
+        });
+    }
+
+    const participant = await trx('sesion_clase_participantes as participante')
+      .join('sesiones_clase as sc', 'sc.id_sesion_clase', 'participante.sesion_clase_id')
+      .where({
+        'participante.estudiante_id': id_estudiante,
+        'sc.estado': 'activa',
+      })
+      .whereIn('participante.estado', ['pendiente', 'en_progreso'])
+      .select(
+        'participante.id_sesion_clase_participante',
+        'participante.sesion_clase_id',
+        'participante.paso_actual'
+      )
+      .first();
+
+    if (participant) {
+      await trx('sesion_clase_participantes')
+        .where({ id_sesion_clase_participante: participant.id_sesion_clase_participante })
+        .update({
+          estado: 'pendiente',
+          iniciada_en: null,
+          finalizada_en: null,
+        });
+    }
+
+    const revokedDeviceSessions = await revokeAllStudentDeviceSessions(
+      id_estudiante,
+      'tutor_recovery',
+      trx
+    );
+
+    await trx('student_device_session_audit').insert({
+      estudiante_id: id_estudiante,
+      institucion_id: student.institucion_id ?? user.institucion_id ?? null,
+      actor_usuario_id: user.id,
+      accion: 'tutor_recovery',
+      metadata: {
+        action,
+        revoked_device_sessions: revokedDeviceSessions,
+        reset_game_sessions: activeSessions.length,
+        sesion_clase_id: participant?.sesion_clase_id ?? null,
+        paso_actual: participant?.paso_actual ?? null,
+      },
+    });
+
+    return {
+      student,
+      data: {
+        action,
+        revoked_device_sessions: revokedDeviceSessions,
+        reset_game_sessions: activeSessions.length,
+        sesion_clase_id: participant?.sesion_clase_id ?? null,
+        paso_actual: participant?.paso_actual ?? null,
+      },
+    };
+  });
+
+  publishStudentAccessChanged({
+    institucionId: user.institucion_id ?? transactionResult.student.institucion_id ?? null,
+    studentId: id_estudiante,
+    grupoId: transactionResult.student.grupo_id ?? null,
+    reason: 'student_device_recovered',
+  });
+
+  return transactionResult.data;
 };
 
 export const listar = async (user, grupo_id) => {

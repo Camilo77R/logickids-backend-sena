@@ -7,12 +7,14 @@ import {
   crearEstudianteSchema,
   actualizarEstudianteSchema,
   cambiarGrupoEstudianteSchema,
+  recuperarSesionDispositivoSchema,
 } from '../schemas/estudiantes.schema.js';
 
 const router = Router();
 
 // Rutas públicas (sin JWT de tutor)
 router.post('/login',         validate(loginEstudianteSchema),   ctrl.loginEstudiante);
+router.delete('/mi-sesion-dispositivo', requireEstudiante,       ctrl.logoutEstudiante);
 router.get('/mi-perfil',      requireEstudiante,                 ctrl.miPerfil);
 router.get('/mi-ranking',     requireEstudiante,                 ctrl.miRanking);
 
@@ -27,6 +29,17 @@ router.put('/:id', requireRole('admin'), validate(actualizarEstudianteSchema), c
 router.patch('/:id/grupo', requireRole('admin'), validate(cambiarGrupoEstudianteSchema), ctrl.cambiarGrupo);
 router.delete('/:id', requireRole('admin'), ctrl.desactivar);
 router.patch('/:id/reactivar', requireRole('admin'), ctrl.reactivar);
+router.get(
+  '/:id/dispositivo-activo',
+  requireRole('admin', 'tutor'),
+  ctrl.obtenerSesionDispositivoActiva
+);
+router.post(
+  '/:id/recuperar-sesion-dispositivo',
+  requireRole('admin', 'tutor'),
+  validate(recuperarSesionDispositivoSchema),
+  ctrl.recuperarSesionDispositivo
+);
 router.get('/:id/qr', requireRole('admin', 'tutor'), ctrl.obtenerQr);
 
 export default router;

@@ -40,7 +40,7 @@ export const obtenerUsuarioAutenticado = (id_usuario) =>
  */
 export const validarSesionWeb = (user) => {
   if (!user) {
-    throw new AppError('Usuario autenticado no encontrado', 401);
+    throw new AppError('Usuario autenticado no encontrado', 401, { code: 'TOKEN_INVALID' });
   }
 
   if (user.estado !== 'activo') {
@@ -86,15 +86,19 @@ export const obtenerEstudianteAutenticado = (id_estudiante) =>
  */
 export const validarSesionEstudiante = (student) => {
   if (!student) {
-    throw new AppError('Estudiante autenticado no encontrado', 401);
+    throw new AppError('Estudiante autenticado no encontrado', 401, { code: 'TOKEN_INVALID' });
   }
 
   if (student.estado !== 'activo') {
-    throw new AppError('La cuenta del estudiante no está habilitada', 403);
+    throw new AppError('La cuenta del estudiante no está habilitada', 403, {
+      code: 'STUDENT_INACTIVE',
+    });
   }
 
   if (student.institucion_id != null && student.institucion_activa === false) {
-    throw new AppError('La institución del estudiante está desactivada', 403);
+    throw new AppError('La institución del estudiante está desactivada', 403, {
+      code: 'INSTITUTION_INACTIVE',
+    });
   }
 
   return student;
