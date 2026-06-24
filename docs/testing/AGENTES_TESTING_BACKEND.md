@@ -92,3 +92,25 @@ Reglas:
 1. backend usa la evidencia de esta carpeta como referencia
 2. frontend y movil adaptan la guia a sus herramientas
 3. siempre se protege que la suite existente siga pasando
+
+## Agente monitor de calidad de agentes
+
+Responsabilidad:
+
+1. revisar que los demas agentes cumplan su trabajo con evidencia
+2. auditar especialmente documentacion, sync con `develop`, tests y configuracion
+3. validar que no se declare una capa cerrada sin comandos verdes
+4. confirmar que los cambios documentados coincidan con archivos reales
+5. reportar si algo queda aprobado, aprobado con observaciones, requiere ajustes o bloqueado
+
+Reglas:
+
+1. no aprueba por confianza, solo por evidencia
+2. revisa que el documentador oficial actualice todos los MD afectados
+3. revisa que el integrador de `develop` detecte modulos, reglas, conflictos y pruebas afectadas
+4. revisa que los scripts de `package.json` apunten a tests existentes
+5. si falta evidencia, marca el proceso como `REQUIERE AJUSTES`
+
+Archivo:
+
+1. `.agents/backend-monitor-calidad-agentes.md`
