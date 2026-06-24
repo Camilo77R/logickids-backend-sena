@@ -35,6 +35,7 @@ npm run test:backend:full
 2. `GUIA_PRACTICAS_TESTING_POR_CAPAS.md`: metodologia que tambien pueden adaptar frontend y movil.
 3. `MODULOS_REGLAS_CASOS_COBERTURA.md`: inventario backend de modulos, reglas, casos y pruebas.
 4. `AGENTES_TESTING_BACKEND.md`: agentes definidos para auditoria, documentacion, limpieza y continuidad.
+5. `REPORTE_ENTREGA_TESTING_BACKEND.md`: resumen de lo subido, metodo usado, agentes, estado y pendientes.
 
 ## Regla principal
 
