@@ -1,3 +1,8 @@
+import {
+  evaluateHistoricalDifficultyPolicy,
+  evaluateInActivityDifficultyPolicy,
+} from '../games/adaptation/inActivityDifficultyPolicies.js';
+
 const MIN_DIFFICULTY = 1;
 const MIN_HISTORICAL_ATTEMPTS = 8;
 const MIN_RECENT_SESSIONS = 2;
@@ -77,6 +82,46 @@ export const calculateAdaptiveDifficulty = ({ stats, recentSessions = [], miniga
     MIN_DIFFICULTY,
     maximumDifficulty
   );
+  const historicalMissionDecision = latestSession
+    ? evaluateHistoricalDifficultyPolicy({ previousSession: latestSession, minigame })
+    : null;
+
+  if (historicalMissionDecision) {
+    const historicalBaseDifficulty = clamp(
+      Number(historicalMissionDecision.baseDifficulty ?? previousDifficulty),
+      MIN_DIFFICULTY,
+      maximumDifficulty
+    );
+    const nextDifficulty = clamp(
+      historicalBaseDifficulty + historicalMissionDecision.difficultyDelta,
+      MIN_DIFFICULTY,
+      maximumDifficulty
+    );
+    const decision =
+      nextDifficulty > historicalBaseDifficulty
+        ? 'subir'
+        : nextDifficulty < historicalBaseDifficulty
+          ? 'bajar'
+          : 'mantener';
+
+    return buildDecision({
+      difficulty: nextDifficulty,
+      previousDifficulty: historicalBaseDifficulty,
+      maximumDifficulty,
+      decision,
+      reason:
+        nextDifficulty === historicalBaseDifficulty && historicalMissionDecision.difficultyDelta !== 0
+          ? 'Mantiene el nivel porque ya alcanzo el limite permitido del juego.'
+          : historicalMissionDecision.reason,
+      metrics: {
+        alcance: 'historico_ultima_mision',
+        habilidad: minigame?.habilidad,
+        ...historicalMissionDecision.metrics,
+        politica_adaptacion: minigame?.slug,
+      },
+    });
+  }
+
   const historicalAttempts = Number(stats?.total_intentos ?? 0);
   const historicalPrecision = Number(stats?.precision_pct ?? 0);
   const recentPrecision = weightedRecentPrecision(recentSessions);
@@ -221,6 +266,43 @@ export const calculateInActivityDifficulty = ({ previousSession, minigame }) => 
     intentos_mision_anterior: attempts,
     estado_mision_anterior: state,
   };
+  const specializedDecision = evaluateInActivityDifficultyPolicy({
+    previousSession,
+    minigame,
+  });
+
+  if (specializedDecision) {
+    const nextDifficulty = clamp(
+      previousDifficulty + specializedDecision.difficultyDelta,
+      MIN_DIFFICULTY,
+      maximumDifficulty
+    );
+    const decision =
+      nextDifficulty > previousDifficulty
+        ? 'subir'
+        : nextDifficulty < previousDifficulty
+          ? 'bajar'
+          : 'mantener';
+    const reachedLimit =
+      specializedDecision.difficultyDelta !== 0 && nextDifficulty === previousDifficulty;
+
+    return buildDecision({
+      difficulty: nextDifficulty,
+      previousDifficulty,
+      maximumDifficulty,
+      decision,
+      reason: reachedLimit
+        ? `Mantiene el nivel porque ya alcanzo el limite ${
+            previousDifficulty === maximumDifficulty ? 'maximo' : 'minimo'
+          } del juego.`
+        : specializedDecision.reason,
+      metrics: {
+        ...commonMetrics,
+        ...specializedDecision.metrics,
+        politica_adaptacion: minigame?.slug,
+      },
+    });
+  }
 
   if (attempts <= 0) {
     return buildDecision({

@@ -29,6 +29,10 @@ import {
   MERCADO_INTELIGENTE_SLUG,
 } from '../games/mercadoInteligente/mercadoInteligente.config.js';
 import {
+  buildTrenFigurasGameConfig,
+  TREN_FIGURAS_SLUG,
+} from '../games/trenFiguras/trenFiguras.config.js';
+import {
   publishClassSessionChanged,
   publishRankingUpdated,
   publishStudentAccessChanged,
@@ -84,6 +88,14 @@ const SOCKET_EVENTS_BY_SLUG = Object.freeze({
 
 const ADAPTIVE_DIFFICULTY_POLICIES = Object.freeze({
   [MERCADO_INTELIGENTE_SLUG]: Object.freeze({
+    supportsHistoricalAdjustment: true,
+    supportsInActivityAdjustment: true,
+  }),
+  [CAMINO_AR_SLUG]: Object.freeze({
+    supportsHistoricalAdjustment: true,
+    supportsInActivityAdjustment: true,
+  }),
+  [TREN_FIGURAS_SLUG]: Object.freeze({
     supportsHistoricalAdjustment: true,
     supportsInActivityAdjustment: true,
   }),
@@ -224,7 +236,17 @@ const resolveRecentSessionsForAdaptiveDifficulty = (
       'sesiones_juego.combo_maximo',
       'sesiones_juego.estrellas_obtenidas',
       'sesiones_juego.finalizada_en',
-      'estados_sesion.nombre as estado'
+      'estados_sesion.nombre as estado',
+      executor.raw(`(
+        SELECT evento.metadata
+        FROM eventos_sesion AS evento
+        JOIN tipos_evento AS tipo
+          ON tipo.id_tipo_evento = evento.tipo_evento_id
+        WHERE evento.sesion_id = sesiones_juego.id_sesion_juego
+          AND tipo.nombre = 'nivel_completado'
+        ORDER BY evento.ocurrido_en DESC, evento.id_evento_sesion DESC
+        LIMIT 1
+      ) AS resultado_mision`)
     )
     .orderBy('sesiones_juego.finalizada_en', 'desc')
     .limit(3);
@@ -349,7 +371,17 @@ const resolvePreviousActivitySession = (
       'sesiones_juego.aciertos',
       'sesiones_juego.errores',
       'sesiones_juego.finalizada_en',
-      'estados_sesion.nombre as estado'
+      'estados_sesion.nombre as estado',
+      executor.raw(`(
+        SELECT evento.metadata
+        FROM eventos_sesion AS evento
+        JOIN tipos_evento AS tipo
+          ON tipo.id_tipo_evento = evento.tipo_evento_id
+        WHERE evento.sesion_id = sesiones_juego.id_sesion_juego
+          AND tipo.nombre = 'nivel_completado'
+        ORDER BY evento.ocurrido_en DESC, evento.id_evento_sesion DESC
+        LIMIT 1
+      ) AS resultado_mision`)
     )
     .orderBy('sesiones_juego.orden_en_ruta', 'desc')
     .orderBy('sesiones_juego.finalizada_en', 'desc')
@@ -481,6 +513,8 @@ const buildGameConfig = (grupoId, minijuego, dificultad, configuracionBase = {})
       return buildCaminoArGameConfig(dificultad, configuracionNormalizada);
     case MERCADO_INTELIGENTE_SLUG:
       return buildMercadoInteligenteGameConfig(dificultad, configuracionNormalizada);
+    case TREN_FIGURAS_SLUG:
+      return buildTrenFigurasGameConfig(dificultad, configuracionNormalizada);
     default:
       return { ...configuracionNormalizada, dificultad };
   }
