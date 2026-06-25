@@ -218,3 +218,153 @@ describe('adaptacion entre misiones de una misma actividad', () => {
     expect(result.metricas.resultado_ignorado).toBe('sin_intentos');
   });
 });
+
+describe('adaptacion especializada de Camino AR', () => {
+  const caminoAr = {
+    slug: 'camino-ar',
+    habilidad: 'Memoria',
+    dificultad_maxima: 4,
+  };
+  const previousMission = (metadata, overrides = {}) => ({
+    id_sesion_juego: 200,
+    orden_en_ruta: 2,
+    dificultad: 2,
+    aciertos: 3,
+    errores: 0,
+    estado: 'completado',
+    resultado_mision: metadata,
+    ...overrides,
+  });
+
+  it('sube tras recordar el patron sin errores ni pistas', () => {
+    const result = calculateInActivityDifficulty({
+      previousSession: previousMission({
+        game: 'camino-ar',
+        end_reason: 'patron_completado',
+        pattern_resolved: true,
+        progress_pct: 100,
+        hints_used: 0,
+        errors: 0,
+      }),
+      minigame: caminoAr,
+    });
+
+    expect(result.dificultad).toBe(3);
+    expect(result.decision).toBe('subir');
+    expect(result.metricas.politica_adaptacion).toBe('camino-ar');
+  });
+
+  it('mantiene cuando completa el patron usando apoyo', () => {
+    const result = calculateInActivityDifficulty({
+      previousSession: previousMission({
+        game: 'camino-ar',
+        end_reason: 'patron_completado',
+        pattern_resolved: true,
+        progress_pct: 100,
+        hints_used: 1,
+        errors: 0,
+      }),
+      minigame: caminoAr,
+    });
+
+    expect(result.dificultad).toBe(2);
+    expect(result.decision).toBe('mantener');
+  });
+
+  it('baja cuando se agota el tiempo', () => {
+    const result = calculateInActivityDifficulty({
+      previousSession: previousMission(
+        {
+          game: 'camino-ar',
+          end_reason: 'tiempo_agotado',
+          pattern_resolved: false,
+          progress_pct: 75,
+          hints_used: 0,
+          errors: 0,
+        },
+        { dificultad: 3 }
+      ),
+      minigame: caminoAr,
+    });
+
+    expect(result.dificultad).toBe(2);
+    expect(result.decision).toBe('bajar');
+  });
+
+  it('mantiene tras un error cuando recordo al menos la mitad', () => {
+    const result = calculateInActivityDifficulty({
+      previousSession: previousMission({
+        game: 'camino-ar',
+        end_reason: 'error_secuencia',
+        pattern_resolved: false,
+        progress_pct: 60,
+        hints_used: 0,
+        errors: 1,
+      }),
+      minigame: caminoAr,
+    });
+
+    expect(result.dificultad).toBe(2);
+    expect(result.decision).toBe('mantener');
+  });
+});
+
+describe('adaptacion historica especializada de Tren de Figuras', () => {
+  const trenFiguras = {
+    slug: 'tren-figuras',
+    habilidad: 'Patrones',
+    dificultad_maxima: 4,
+  };
+  const recentMission = (metadata) => ({
+    dificultad: 1,
+    aciertos: 8,
+    errores: 2,
+    estado: 'completado',
+    resultado_mision: metadata,
+  });
+
+  it('continua desde la dificultad interna reportada y sube con dominio', () => {
+    const result = calculateAdaptiveDifficulty({
+      stats: stats(90, 20),
+      recentSessions: [
+        recentMission({
+          game: 'tren-figuras',
+          mission_completed: true,
+          precision_pct: 90,
+          difficulty: 3,
+          laps_used: 2,
+          max_laps: 4,
+          pending_wagons: 0,
+        }),
+      ],
+      minigame: trenFiguras,
+    });
+
+    expect(result.dificultad).toBe(4);
+    expect(result.decision).toBe('subir');
+    expect(result.metricas.alcance).toBe('historico_ultima_mision');
+  });
+
+  it('baja cuando se agotan las vueltas aunque los clics hayan sido precisos', () => {
+    const result = calculateAdaptiveDifficulty({
+      stats: stats(90, 20),
+      recentSessions: [
+        recentMission({
+          game: 'tren-figuras',
+          mission_completed: false,
+          end_reason: 'vueltas_agotadas',
+          precision_pct: 80,
+          difficulty: 3,
+          laps_used: 4,
+          max_laps: 4,
+          pending_wagons: 2,
+        }),
+      ],
+      minigame: trenFiguras,
+    });
+
+    expect(result.dificultad).toBe(2);
+    expect(result.decision).toBe('bajar');
+    expect(result.metricas.vagones_pendientes).toBe(2);
+  });
+});
