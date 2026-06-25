@@ -29,6 +29,7 @@ import {
   publishRankingUpdated,
   publishStudentAccessChanged,
 } from '../realtime/realtime.events.js';
+import { executeIdempotent } from './student-idempotency.service.js';
 
 /** Resuelve el ID de una tabla catálogo por su nombre usando la PK correcta */
 const resolveCatalogId = async (table, pkColumn, nombre, executor = db) => {
@@ -77,7 +78,6 @@ const calcularEstrellasSesion = ({ aciertos = 0, errores = 0, estado = 'completa
 const SOCKET_EVENTS_BY_SLUG = Object.freeze({
   [CODIGO_ESTELAR_SLUG]: CODIGO_ESTELAR_SOCKET_EVENTS,
 });
-
 
 /**
  * Relee el estado vivo del estudiante y de su contexto de juego.
@@ -196,15 +196,100 @@ const resolveSuggestedDifficulty = async (estudiante_id, minijuego, executor = d
     .where({ estudiante_id, habilidad_id: minijuego.habilidad_id })
     .first();
 
+  const recentSessions = await executor('sesiones_juego')
+    .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
+    .where({
+      'sesiones_juego.estudiante_id': estudiante_id,
+      'sesiones_juego.minijuego_id': minijuego.id,
+    })
+    .whereIn('estados_sesion.nombre', ['completado', 'abandonado'])
+    .select(
+      'sesiones_juego.dificultad',
+      'sesiones_juego.aciertos',
+      'sesiones_juego.errores',
+      'sesiones_juego.puntaje',
+      'sesiones_juego.combo_maximo',
+      'sesiones_juego.estrellas_obtenidas',
+      'sesiones_juego.finalizada_en',
+      'estados_sesion.nombre as estado'
+    )
+    .orderBy('sesiones_juego.finalizada_en', 'desc')
+    .limit(3);
+
   if (!stats || stats.total_intentos <= 0) {
-    return 1;
+    return {
+      dificultad: 1,
+      fuente: 'reglas',
+      motivo: 'Primera experiencia o sin estadisticas suficientes para esta habilidad.',
+      metricas: {
+        habilidad: minijuego.habilidad,
+        total_intentos: 0,
+        sesiones_recientes: 0,
+      },
+    };
   }
 
   const precision = Number(stats.precision_pct);
-  if (precision >= 85) return Math.min(minijuego.dificultad_maxima, 4);
-  if (precision >= 65) return Math.min(minijuego.dificultad_maxima, 3);
-  if (precision >= 40) return Math.min(minijuego.dificultad_maxima, 2);
-  return 1;
+  const totalAttempts = Number(stats.total_intentos ?? 0);
+  const averageReaction = Number(stats.promedio_reaccion_ms ?? 0);
+  const lastSession = recentSessions[0] ?? null;
+  const lastDifficulty = Number(lastSession?.dificultad ?? 1);
+  const recentCompleted = recentSessions.filter((session) => session.estado === 'completado');
+  const recentAcciertos = recentSessions.reduce((sum, session) => sum + Number(session.aciertos ?? 0), 0);
+  const recentErrores = recentSessions.reduce((sum, session) => sum + Number(session.errores ?? 0), 0);
+  const recentTotal = recentAcciertos + recentErrores;
+  const recentPrecision = recentTotal > 0 ? (recentAcciertos / recentTotal) * 100 : precision;
+  const strongStreak =
+    recentCompleted.length >= 2 &&
+    recentCompleted.slice(0, 2).every((session) => {
+      const attempts = Number(session.aciertos ?? 0) + Number(session.errores ?? 0);
+      if (attempts === 0) return false;
+      return (Number(session.aciertos ?? 0) / attempts) * 100 >= 80;
+    });
+
+  let nextDifficulty = lastDifficulty;
+  let motivo = 'Se mantiene la dificultad para consolidar la habilidad.';
+
+  if (totalAttempts < 8) {
+    nextDifficulty = Math.min(Math.max(lastDifficulty, 1), minijuego.dificultad_maxima);
+    motivo = 'Aun hay pocos intentos acumulados; se evita subir dificultad hasta tener mas evidencia.';
+  } else if (precision >= 85 && recentPrecision >= 80 && strongStreak) {
+    nextDifficulty = lastDifficulty + 1;
+    motivo = 'Sube un nivel por alta precision historica y buen rendimiento en sesiones recientes.';
+  } else if (precision < 50 || recentPrecision < 45) {
+    nextDifficulty = lastDifficulty - 1;
+    motivo = 'Baja un nivel porque la precision indica que necesita refuerzo previo.';
+  } else if (precision >= 70 && recentPrecision >= 65 && averageReaction > 0 && averageReaction <= 2500) {
+    nextDifficulty = lastDifficulty;
+    motivo = 'Mantiene dificultad: hay progreso, pero conviene afianzar antes de subir.';
+  } else if (precision >= 65) {
+    nextDifficulty = Math.max(lastDifficulty, 2);
+    motivo = 'Ajuste moderado por precision aceptable en la habilidad.';
+  } else {
+    nextDifficulty = Math.min(lastDifficulty, 2);
+    motivo = 'Se prioriza practica guiada porque la precision aun esta en refuerzo.';
+  }
+
+  const dificultad = Math.max(1, Math.min(minijuego.dificultad_maxima, nextDifficulty));
+
+  return {
+    dificultad,
+    fuente: 'reglas',
+    motivo,
+    metricas: {
+      habilidad: minijuego.habilidad,
+      precision_historica: precision,
+      precision_reciente: Number(recentPrecision.toFixed(2)),
+      total_intentos: totalAttempts,
+      aciertos: Number(stats.aciertos ?? 0),
+      errores: Number(stats.errores ?? 0),
+      promedio_reaccion_ms: stats.promedio_reaccion_ms,
+      sesiones_recientes: recentSessions.length,
+      ultima_dificultad: lastDifficulty,
+      dificultad_maxima: minijuego.dificultad_maxima,
+      racha_fuerte: strongStreak,
+    },
+  };
 };
 
 const resolveInitialDifficulty = async (
@@ -224,7 +309,16 @@ const resolveInitialDifficulty = async (
     );
   }
 
-  return requestedDifficulty;
+  return {
+    dificultad: requestedDifficulty,
+    fuente: 'base',
+    motivo: 'Dificultad solicitada explicitamente por el cliente o tutor.',
+    metricas: {
+      habilidad: minijuego.habilidad,
+      dificultad_solicitada: requestedDifficulty,
+      dificultad_maxima: minijuego.dificultad_maxima,
+    },
+  };
 };
 
 const buildRealtimeConfig = (grupoId, minijuegoSlug) => {
@@ -451,8 +545,6 @@ const finalizarSesionInterna = async (
       aciertos: officialSummary.aciertos,
       errores: officialSummary.errores,
       combo_maximo: officialSummary.combo_maximo,
-      minijuego_id: sesionExistente.minijuego_id,
-      minijuego_slug: sesionExistente.minijuego_slug,
       estado,
     },
     executor
@@ -496,7 +588,6 @@ const finalizarSesionInterna = async (
 const resolveSessionForFinalization = async (sesion_id, estudiante_id, executor = db) =>
   executor('sesiones_juego')
     .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
-    .join('minijuegos', 'minijuegos.id_minijuego', 'sesiones_juego.minijuego_id')
     .where({
       'sesiones_juego.id_sesion_juego': sesion_id,
       'sesiones_juego.estudiante_id': estudiante_id,
@@ -505,13 +596,12 @@ const resolveSessionForFinalization = async (sesion_id, estudiante_id, executor 
       'sesiones_juego.id_sesion_juego',
       'sesiones_juego.estudiante_id',
       'sesiones_juego.dificultad',
-      'sesiones_juego.minijuego_id',
       'sesiones_juego.sesion_clase_id',
       'sesiones_juego.orden_en_ruta',
       'sesiones_juego.estado_id',
-      'minijuegos.slug as minijuego_slug',
       'estados_sesion.nombre as estado'
     )
+    .forUpdate('sesiones_juego')
     .first();
 
 /**
@@ -569,9 +659,18 @@ const buildPersistedOfficialSummary = (sesion) => ({
  */
 export const iniciar = async (
   estudiante_id,
-  { minijuego_id, dificultad: requestedDifficulty }
+  { minijuego_id, dificultad: requestedDifficulty, attempt_id }
 ) => {
   return db.transaction(async (trx) => {
+    const idempotency = await executeIdempotent(
+      {
+        estudianteId: estudiante_id,
+        operacion: 'attempt',
+        key: attempt_id,
+        payload: { minijuego_id, dificultad: requestedDifficulty },
+        executor: trx,
+      },
+      async () => {
     let playableContext = await resolvePlayableStudentContext(estudiante_id, trx);
     assertPlayableStudentContext(playableContext);
 
@@ -598,19 +697,28 @@ export const iniciar = async (
     }
 
     const minijuego = await resolveMinijuegoCatalog(selectedMinigameId, trx);
-    const dificultad = await resolveInitialDifficulty(
+    const adaptationDecision = await resolveInitialDifficulty(
       estudiante_id,
       minijuego,
       requestedDifficulty,
       trx
     );
-    const fuenteAdaptacion = requestedDifficulty == null ? 'reglas' : 'base';
+    const dificultad = adaptationDecision.dificultad;
+    const fuenteAdaptacion = adaptationDecision.fuente;
     const gameConfig = buildGameConfig(
       playableContext.grupo_id,
       minijuego,
       dificultad,
       playableContext.sesion_configuracion_base
     );
+    const appliedConfig = {
+      ...gameConfig,
+      adaptacion: {
+        fuente: adaptationDecision.fuente,
+        motivo: adaptationDecision.motivo,
+        metricas: adaptationDecision.metricas,
+      },
+    };
 
     await marcarParticipanteEnProgreso(
       {
@@ -626,7 +734,7 @@ export const iniciar = async (
       dificultad,
       sesion_clase_id: playableContext.sesion_clase_id,
       orden_en_ruta: playableContext.sesion_paso_actual ?? 1,
-      configuracion_aplicada: gameConfig,
+      configuracion_aplicada: appliedConfig,
       fuente_adaptacion: fuenteAdaptacion,
       executor: trx,
     });
@@ -637,7 +745,7 @@ export const iniciar = async (
       typeof sesion.configuracion_aplicada === 'object' &&
       !Array.isArray(sesion.configuracion_aplicada)
         ? sesion.configuracion_aplicada
-        : gameConfig;
+        : appliedConfig;
 
     return buildSessionStartResponse({
       sesion,
@@ -652,6 +760,10 @@ export const iniciar = async (
       nivelEnBloque: playableContext.sesion_nivel_en_bloque ?? 1,
       gameConfig: effectiveGameConfig,
     });
+      }
+    );
+
+    return idempotency.value;
   });
 };
 
@@ -661,21 +773,68 @@ export const iniciar = async (
 export const registrarEvento = async (
   sesion_id,
   estudiante_id,
-  { tipo_evento, habilidad, tiempo_reaccion_ms, puntos, combo_en_evento, metadata }
+  {
+    event_id,
+    sequence,
+    tipo_evento,
+    habilidad,
+    tiempo_reaccion_ms,
+    puntos,
+    combo_en_evento,
+    metadata,
+  }
 ) => {
-  const sesion = await db('sesiones_juego')
+  return db.transaction(async (trx) => {
+    const idempotency = await executeIdempotent(
+      {
+        estudianteId: estudiante_id,
+        operacion: 'event',
+        key: event_id,
+        payload: {
+          sesion_id,
+          sequence,
+          tipo_evento,
+          habilidad,
+          tiempo_reaccion_ms,
+          puntos,
+          combo_en_evento,
+          metadata,
+        },
+        executor: trx,
+      },
+      async () => {
+  const sesion = await trx('sesiones_juego')
     .where({ id_sesion_juego: sesion_id, estudiante_id })
+    .forUpdate()
     .first();
   if (!sesion) throw new AppError('Sesión no encontrada', 404);
 
-  const activo_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'activo');
+  const activo_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'activo', trx);
   if (sesion.estado_id !== activo_id) throw new AppError('La sesión ya no está activa', 409);
 
-  const tipo_evento_id = await resolveCatalogId('tipos_evento', 'id_tipo_evento', tipo_evento);
+  if (sequence != null) {
+    const existingSequence = await trx('eventos_sesion')
+      .where({ sesion_id, client_sequence: sequence })
+      .select('id_evento_sesion')
+      .first();
+
+    if (existingSequence) {
+      throw new AppError('La secuencia del evento ya fue utilizada', 409, {
+        code: 'IDEMPOTENCY_CONFLICT',
+      });
+    }
+  }
+
+  const tipo_evento_id = await resolveCatalogId(
+    'tipos_evento',
+    'id_tipo_evento',
+    tipo_evento,
+    trx
+  );
 
   let habilidad_id = null;
   if (habilidad) {
-    const habilidadRecord = await db('habilidades')
+    const habilidadRecord = await trx('habilidades')
       .where({ nombre: habilidad })
       .select('id_habilidad')
       .first();
@@ -688,7 +847,7 @@ export const registrarEvento = async (
   }
 
   if (sesion.sesion_clase_id != null) {
-    const sesionClase = await db('sesiones_clase')
+    const sesionClase = await trx('sesiones_clase')
       .where({ id_sesion_clase: sesion.sesion_clase_id })
       .select('estado')
       .first();
@@ -698,9 +857,10 @@ export const registrarEvento = async (
     }
   }
 
-  const [evento] = await db('eventos_sesion')
+  const [evento] = await trx('eventos_sesion')
     .insert({
       sesion_id,
+      client_sequence: sequence ?? null,
       tipo_evento_id,
       habilidad_id,
       tiempo_reaccion_ms: tiempo_reaccion_ms ?? null,
@@ -711,6 +871,11 @@ export const registrarEvento = async (
     .returning('id_evento_sesion');
 
   return evento;
+      }
+    );
+
+    return idempotency.value;
+  });
 };
 
 /**
@@ -719,16 +884,41 @@ export const registrarEvento = async (
 export const finalizar = async (
   sesion_id,
   estudiante_id,
-  { estado = 'completado', cerrarSesionClase = true } = {},
+  options = {},
   executor = db
 ) => {
+  const {
+    estado = 'completado',
+    cerrarSesionClase = true,
+    finalization_id,
+  } = options;
+
   if (executor === db) {
-    const result = await db.transaction((trx) =>
-      finalizarSesionInterna(sesion_id, estudiante_id, { estado, cerrarSesionClase }, trx)
+    const idempotency = await db.transaction((trx) =>
+      executeIdempotent(
+        {
+          estudianteId: estudiante_id,
+          operacion: 'finalization',
+          key: finalization_id,
+          payload: { sesion_id, ...options },
+          executor: trx,
+        },
+        () => finalizarSesionInterna(
+          sesion_id,
+          estudiante_id,
+          { estado, cerrarSesionClase },
+          trx
+        )
+      )
     );
 
-    await emitPostFinalizationRealtimeUpdates({ result, studentId: estudiante_id });
-    return result;
+    if (!idempotency.replayed) {
+      await emitPostFinalizationRealtimeUpdates({
+        result: idempotency.value,
+        studentId: estudiante_id,
+      });
+    }
+    return idempotency.value;
   }
 
   return finalizarSesionInterna(
@@ -738,6 +928,91 @@ export const finalizar = async (
     executor
   );
 };
+
+export const obtenerCheckpoint = async (sesion_id, estudiante_id) => {
+  const session = await db('sesiones_juego')
+    .where({ id_sesion_juego: sesion_id, estudiante_id })
+    .select('id_sesion_juego')
+    .first();
+  if (!session) throw new AppError('Sesión no encontrada', 404);
+
+  const checkpoint = await db('student_game_checkpoints')
+    .where({ sesion_id, estudiante_id })
+    .first();
+
+  return checkpoint
+    ? {
+        session_id: sesion_id,
+        version: checkpoint.version,
+        state: checkpoint.estado,
+        updated_at: checkpoint.actualizada_en,
+      }
+    : { session_id: sesion_id, version: 0, state: {}, updated_at: null };
+};
+
+export const guardarCheckpoint = async (
+  sesion_id,
+  estudiante_id,
+  { expected_version, state }
+) =>
+  db.transaction(async (trx) => {
+    const session = await trx('sesiones_juego as sj')
+      .join('estados_sesion as es', 'es.id_estado_sesion', 'sj.estado_id')
+      .where({
+        'sj.id_sesion_juego': sesion_id,
+        'sj.estudiante_id': estudiante_id,
+      })
+      .select('sj.id_sesion_juego', 'es.nombre as estado')
+      .forUpdate('sj')
+      .first();
+
+    if (!session) throw new AppError('Sesión no encontrada', 404);
+    if (session.estado !== 'activo') {
+      throw new AppError('La sesión ya no está activa', 409, {
+        code: 'GAME_SESSION_NOT_ACTIVE',
+      });
+    }
+
+    const current = await trx('student_game_checkpoints')
+      .where({ sesion_id, estudiante_id })
+      .forUpdate()
+      .first();
+    const currentVersion = Number(current?.version ?? 0);
+
+    if (currentVersion !== expected_version) {
+      throw new AppError('El checkpoint fue actualizado por otra solicitud', 409, {
+        code: 'CHECKPOINT_VERSION_CONFLICT',
+        current_version: currentVersion,
+        current_checkpoint: current?.estado ?? {},
+      });
+    }
+
+    const nextVersion = currentVersion + 1;
+    const [saved] = current
+      ? await trx('student_game_checkpoints')
+          .where({ sesion_id, estudiante_id, version: expected_version })
+          .update({
+            version: nextVersion,
+            estado: state,
+            actualizada_en: trx.fn.now(),
+          })
+          .returning('*')
+      : await trx('student_game_checkpoints')
+          .insert({
+            sesion_id,
+            estudiante_id,
+            version: nextVersion,
+            estado: state,
+          })
+          .returning('*');
+
+    return {
+      session_id: sesion_id,
+      version: saved.version,
+      state: saved.estado,
+      updated_at: saved.actualizada_en,
+    };
+  });
 
 /**
  * Finaliza en lote varias sesiones autoritativas de una misma sala.
@@ -856,10 +1131,10 @@ export const detalleEventos = async (sesion_id, user) => {
       'eventos_sesion.tiempo_reaccion_ms',
       'eventos_sesion.puntos',
       'eventos_sesion.combo_en_evento',
+      'eventos_sesion.client_sequence as sequence',
       'eventos_sesion.metadata',
       'eventos_sesion.ocurrido_en'
     )
+    .orderByRaw('eventos_sesion.client_sequence ASC NULLS LAST')
     .orderBy('eventos_sesion.ocurrido_en', 'asc');
 };
-
-
