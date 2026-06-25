@@ -10,17 +10,9 @@ CREATE TABLE IF NOT EXISTS public.catalogo_logros
     nombre character varying(100) COLLATE pg_catalog."default" NOT NULL,
     descripcion character varying(200) COLLATE pg_catalog."default",
     icono character varying(50) COLLATE pg_catalog."default",
-    tipo character varying(20) COLLATE pg_catalog."default" NOT NULL DEFAULT 'global',
-    modulo character varying(20) COLLATE pg_catalog."default",
-    icon_key character varying(80) COLLATE pg_catalog."default",
-    puntos integer NOT NULL DEFAULT 1,
-    condicion_desbloqueo jsonb NOT NULL DEFAULT '{}'::jsonb,
-    orden integer NOT NULL DEFAULT 100,
     activo boolean NOT NULL DEFAULT true,
     CONSTRAINT catalogo_logros_pkey PRIMARY KEY (id_catalogo_logro),
-    CONSTRAINT catalogo_logros_clave_key UNIQUE (clave),
-    CONSTRAINT ck_catalogo_logros_tipo CHECK (tipo::text = ANY (ARRAY['module'::character varying, 'global'::character varying, 'special'::character varying]::text[])),
-    CONSTRAINT ck_catalogo_logros_modulo CHECK (modulo IS NULL OR modulo::text = ANY (ARRAY['memoria'::character varying, 'patrones'::character varying, 'logica'::character varying, 'razonar'::character varying, 'atencion'::character varying]::text[]))
+    CONSTRAINT catalogo_logros_clave_key UNIQUE (clave)
 );
 
 CREATE TABLE IF NOT EXISTS public.estadisticas_habilidad
@@ -172,8 +164,6 @@ CREATE TABLE IF NOT EXISTS public.logros
     estudiante_id integer NOT NULL,
     catalogo_logro_id integer NOT NULL,
     desbloqueado_en timestamp with time zone NOT NULL DEFAULT now(),
-    sesion_id integer,
-    puntos_otorgados integer NOT NULL DEFAULT 0,
     CONSTRAINT logros_pkey PRIMARY KEY (id_logro),
     CONSTRAINT logros_estudiante_id_catalogo_logro_id_key UNIQUE (estudiante_id, catalogo_logro_id)
 );
@@ -552,14 +542,6 @@ ALTER TABLE IF EXISTS public.logros
     ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_logros_estudiante
     ON public.logros(estudiante_id);
-
-ALTER TABLE IF EXISTS public.logros
-    ADD CONSTRAINT logros_sesion_id_fkey FOREIGN KEY (sesion_id)
-    REFERENCES public.sesiones_juego (id_sesion_juego) MATCH SIMPLE
-    ON UPDATE NO ACTION
-    ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS idx_logros_sesion
-    ON public.logros(sesion_id);
 
 
 ALTER TABLE IF EXISTS public.minijuegos

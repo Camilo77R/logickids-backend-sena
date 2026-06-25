@@ -178,98 +178,52 @@ const hasSameRankingMetrics = (left, right) =>
   left.errores_totales === right.errores_totales &&
   left.sesiones_finalizadas === right.sesiones_finalizadas;
 
-const normalizeRankingRow = (row) => ({
-  estudiante_id: row.estudiante_id,
-  nombre: row.nombre,
-  color_avatar: row.color_avatar,
-  participante_estado: row.participante_estado,
-  puntaje_total: normalizeInteger(row.puntaje_total),
-  aciertos_totales: normalizeInteger(row.aciertos_totales),
-  errores_totales: normalizeInteger(row.errores_totales),
-  combo_maximo: normalizeInteger(row.combo_maximo),
-  estrellas_totales: normalizeInteger(row.estrellas_totales),
-  sesiones_finalizadas: normalizeInteger(row.sesiones_finalizadas),
-  ultima_finalizacion: row.ultima_finalizacion ?? null,
-});
+const buildRankingEntries = (rows) => {
+  const normalizedRows = rows.map((row) => ({
+    estudiante_id: row.estudiante_id,
+    nombre: row.nombre,
+    color_avatar: row.color_avatar,
+    participante_estado: row.participante_estado,
+    puntaje_total: normalizeInteger(row.puntaje_total),
+    aciertos_totales: normalizeInteger(row.aciertos_totales),
+    errores_totales: normalizeInteger(row.errores_totales),
+    combo_maximo: normalizeInteger(row.combo_maximo),
+    estrellas_totales: normalizeInteger(row.estrellas_totales),
+    sesiones_finalizadas: normalizeInteger(row.sesiones_finalizadas),
+    ultima_finalizacion: row.ultima_finalizacion ?? null,
+  }));
 
-const hasParticipatedInRanking = (row) => row.puntaje_total > 0 || row.sesiones_finalizadas > 0;
+  normalizedRows.sort(compareRankingEntries);
 
-const toRankingEntry = (row, { posicion, estaEnTop3, participacion }) => ({
-  posicion,
-  estudiante_id: row.estudiante_id,
-  nombre: row.nombre,
-  color_avatar: row.color_avatar,
-  participante_estado: row.participante_estado,
-  valor: row.puntaje_total,
-  puntaje: row.puntaje_total,
-  aciertos: row.aciertos_totales,
-  errores: row.errores_totales,
-  combo_maximo: row.combo_maximo,
-  estrellas_totales: row.estrellas_totales,
-  sesiones_finalizadas: row.sesiones_finalizadas,
-  ultima_finalizacion: row.ultima_finalizacion,
-  esta_en_top3: estaEnTop3,
-  participacion,
-});
-
-const partitionRankingRows = (rows) =>
-  rows.reduce(
-    (accumulator, row) => {
-      if (hasParticipatedInRanking(row)) {
-        accumulator.conParticipacion.push(row);
-      } else {
-        accumulator.sinParticipacion.push(row);
-      }
-
-      return accumulator;
-    },
-    {
-      conParticipacion: [],
-      sinParticipacion: [],
-    }
-  );
-
-const buildRankedEntries = (rows) =>
-  rows.map((row, index) => {
-    const previousEntry = index > 0 ? rows[index - 1] : null;
-    const previousPosition = index > 0 ? rows[index - 1]._rankingPosition : null;
+  return normalizedRows.map((row, index) => {
+    const previousEntry = index > 0 ? normalizedRows[index - 1] : null;
+    const previousPosition = index > 0 ? normalizedRows[index - 1]._rankingPosition : null;
     const rankingPosition =
       previousEntry && hasSameRankingMetrics(previousEntry, row) ? previousPosition : index + 1;
 
     row._rankingPosition = rankingPosition;
 
-    return toRankingEntry(row, {
+    return {
       posicion: rankingPosition,
-      estaEnTop3: index < 3,
-      participacion: true,
-    });
+      estudiante_id: row.estudiante_id,
+      nombre: row.nombre,
+      color_avatar: row.color_avatar,
+      participante_estado: row.participante_estado,
+      valor: row.puntaje_total,
+      puntaje: row.puntaje_total,
+      aciertos: row.aciertos_totales,
+      errores: row.errores_totales,
+      combo_maximo: row.combo_maximo,
+      estrellas_totales: row.estrellas_totales,
+      sesiones_finalizadas: row.sesiones_finalizadas,
+      ultima_finalizacion: row.ultima_finalizacion,
+      esta_en_top3: index < 3,
+    };
   });
-
-const buildPendingEntries = (rows) =>
-  rows.map((row) =>
-    toRankingEntry(row, {
-      posicion: null,
-      estaEnTop3: false,
-      participacion: false,
-    })
-  );
-
-const buildRankingEntries = (rows) => {
-  const normalizedRows = rows.map(normalizeRankingRow);
-  const { conParticipacion, sinParticipacion } = partitionRankingRows(normalizedRows);
-
-  conParticipacion.sort(compareRankingEntries);
-  sinParticipacion.sort(compareRankingEntries);
-
-  return {
-    conParticipacion: buildRankedEntries(conParticipacion),
-    sinParticipacion: buildPendingEntries(sinParticipacion),
-  };
 };
 
 const buildRankingPayload = ({ scope, rows, ownerStudentId = null }) => {
-  const { conParticipacion, sinParticipacion } = buildRankingEntries(rows);
-  const ranking = [...conParticipacion, ...sinParticipacion];
+  const ranking = buildRankingEntries(rows);
   const miPosicion =
     ownerStudentId == null
       ? null
@@ -279,11 +233,9 @@ const buildRankingPayload = ({ scope, rows, ownerStudentId = null }) => {
     scope,
     metrica: RANKING_METRIC,
     total_participantes: ranking.length,
-    total_con_participacion: conParticipacion.length,
-    total_sin_participacion: sinParticipacion.length,
     ranking,
-    top3: conParticipacion.slice(0, 3),
-    resto: [...conParticipacion.slice(3), ...sinParticipacion],
+    top3: ranking.slice(0, 3),
+    resto: ranking.slice(3),
     mi_posicion: miPosicion,
   };
 };
