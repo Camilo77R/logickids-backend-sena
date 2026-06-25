@@ -26,6 +26,65 @@ No se empieza escribiendo pruebas por escribir. Primero se responde:
 Cuando eso esta claro, se escriben pruebas pequenas, repetibles y faciles de
 ejecutar.
 
+## Primero: sacar modulos, reglas y casos
+
+Antes de escribir pruebas, cada equipo debe crear su propio inventario del area
+que le corresponde. Esto es obligatorio para trabajar en orden.
+
+El objetivo de ese inventario es entender que existe, que reglas se deben
+proteger y que pruebas hacen falta. En backend se hizo con un documento de
+modulos, reglas, casos y cobertura; frontend y movil deben hacer lo mismo
+adaptado a su area.
+
+Documento recomendado por area:
+
+1. frontend: `docs/testing/FRONTEND_MODULOS_REGLAS_CASOS_COBERTURA.md`
+2. movil: `docs/testing/MOVIL_MODULOS_REGLAS_CASOS_COBERTURA.md`
+3. backend futuro: `docs/testing/BACKEND_MODULOS_REGLAS_CASOS_COBERTURA.md`
+
+Ese MD debe tener como minimo:
+
+1. modulos, pantallas o flujos principales
+2. casos de uso de cada modulo
+3. reglas de negocio, reglas visuales o reglas de navegacion
+4. riesgos si esa parte falla
+5. pruebas existentes
+6. pruebas faltantes
+7. capa donde se va a probar
+8. herramienta sugerida
+9. comando de ejecucion cuando exista
+10. estado: pendiente, en progreso o cerrado
+
+Ejemplo frontend:
+
+```text
+Modulo/Pantalla: login
+Caso de uso: iniciar sesion como tutor
+Regla: no permite enviar credenciales vacias
+Riesgo: el usuario queda sin feedback o se envia una peticion invalida
+Capa: formularios y validaciones
+Herramienta: Testing Library o Playwright
+Prueba existente: pendiente
+Prueba faltante: validar mensajes de error
+Estado: pendiente
+```
+
+Ejemplo movil:
+
+```text
+Modulo/Pantalla: acceso por QR
+Caso de uso: escanear QR infantil
+Regla: QR invalido no abre dashboard
+Riesgo: acceso incorrecto o sesion mal guardada
+Capa: acceso por QR
+Herramienta: prueba del framework movil o end to end
+Prueba existente: pendiente
+Prueba faltante: validar error y bloqueo de navegacion
+Estado: pendiente
+```
+
+Despues de crear ese inventario, ahi si se empieza a escribir pruebas por capa.
+
 ## Metodo que ya se uso para cerrar backend
 
 Backend ya fue trabajado en esta rama con `Vitest`, `Supertest` y
@@ -272,6 +331,9 @@ El README de cada area deberia explicar:
 6. que resultado dio la suite
 7. que documentos sirven como evidencia
 8. que queda pendiente
+
+Ademas, el README debe enlazar el MD de inventario de modulos, reglas, casos y
+cobertura que haya creado el equipo.
 
 Ejemplo:
 
