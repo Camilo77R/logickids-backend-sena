@@ -2,14 +2,14 @@
 
 ## Para que sirve esta guia
 
-Esta guia es para que cualquier integrante del equipo pueda hacer pruebas en
-LogicKids siguiendo el mismo metodo que se uso para cerrar el backend. No obliga
-a usar la misma herramienta en todas las areas. Lo importante es conservar la
-forma de trabajo: entender el modulo, sacar reglas, ordenar por criticidad,
-probar por capas, ejecutar la suite y documentar solo lo que quede en verde.
+Esta guia es para que cualquier integrante del equipo pueda usar como referencia
+el metodo que se aplico para cerrar las pruebas del backend. No significa que
+todos deban volver a hacer backend. Backend ya quedo cerrado en esta rama y se
+usa aqui como ejemplo real.
 
-Si te toca backend, frontend o movil, la herramienta puede cambiar. El metodo
-no cambia.
+Si a un companero le toca frontend o movil, debe adaptar esta misma forma de
+trabajo a su area: cambia la herramienta, cambian los archivos y cambian algunos
+tipos de prueba, pero se conserva el metodo por capas.
 
 ## Idea principal
 
@@ -26,10 +26,12 @@ No se empieza escribiendo pruebas por escribir. Primero se responde:
 Cuando eso esta claro, se escriben pruebas pequenas, repetibles y faciles de
 ejecutar.
 
-## Metodo que usamos en backend
+## Metodo que ya se uso para cerrar backend
 
-En backend usamos `Vitest`, `Supertest` y `socket.io-client`, pero la practica
-principal fue organizar el trabajo por capas.
+Backend ya fue trabajado en esta rama con `Vitest`, `Supertest` y
+`socket.io-client`. Esta seccion no es una orden para repetir backend desde cero;
+es el ejemplo que deben mirar para entender como organizar cualquier area por
+capas.
 
 Flujo aplicado:
 
@@ -52,16 +54,17 @@ Una capa no esta cerrada porque tenga pruebas. Esta cerrada porque sus pruebas
 pasan, la suite completa sigue verde y la documentacion coincide con lo probado.
 ```
 
-## Como aplicar el metodo si te toca backend
+## Como usar el backend como ejemplo
 
-Herramientas usadas en esta rama:
+Estas fueron las herramientas usadas en backend:
 
 1. `Vitest`
 2. `Supertest`
 3. `socket.io-client`
 4. mocks para servicios externos
 
-Que debes probar:
+Lo que se probo en backend sirve como referencia para pensar pruebas en otras
+areas:
 
 1. endpoints reales
 2. codigos HTTP
@@ -71,7 +74,7 @@ Que debes probar:
 6. reglas de negocio
 7. integraciones con mocks cuando dependan de servicios externos
 
-Ejemplo de capa backend:
+Ejemplo de capa backend ya cerrada:
 
 ```text
 Capa: seguridad y autenticacion
@@ -82,9 +85,11 @@ Comando: npm run test:capa1
 Evidencia: prueba verde y suite completa verde
 ```
 
-## Como aplicar el metodo si te toca frontend
+## Como adaptar el metodo si te toca frontend
 
-La herramienta puede ser distinta. Por ejemplo:
+Si tu trabajo es frontend, no copias los tests backend. Tomas la estructura de
+capas y la adaptas a lo que el usuario ve y hace en la interfaz. La herramienta
+puede ser distinta. Por ejemplo:
 
 1. `Vitest`
 2. `Testing Library`
@@ -123,9 +128,11 @@ Herramienta posible: Testing Library
 Evidencia: test verde y suite frontend verde
 ```
 
-## Como aplicar el metodo si te toca movil
+## Como adaptar el metodo si te toca movil
 
-La herramienta depende del framework usado por la app movil. Puede ser una
+Si tu trabajo es movil, tampoco repites backend. Tomas el metodo y lo llevas a
+pantallas, navegacion, QR, errores de red y flujos conectados al backend. La
+herramienta depende del framework usado por la app movil. Puede ser una
 herramienta de pruebas unitarias, pruebas de componentes, end to end o pruebas
 manuales guiadas cuando intervienen camara, sensores o red local.
 
@@ -176,7 +183,7 @@ Resultado esperado:
 Evidencia:
 ```
 
-Ejemplo:
+Ejemplo basado en backend, solo como referencia:
 
 ```text
 Area: backend
@@ -291,6 +298,7 @@ npm run test:backend:full
 
 ## Mensaje para el equipo
 
-La herramienta puede cambiar segun el area, pero la forma de pensar debe ser la
-misma: probar por capas, priorizar riesgos, dejar evidencia y no cerrar nada
-sin que pase en verde.
+No tienen que repetir backend si no les corresponde. Backend queda como ejemplo
+cerrado de como se hizo el proceso. Si el trabajo es frontend o movil, usen esta
+guia para adaptar el mismo metodo: capas, reglas, criticidad, evidencia y cierre
+solo cuando las pruebas pasen.
