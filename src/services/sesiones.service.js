@@ -4,6 +4,10 @@ import { assertSessionBelongsToUser, assertStudentBelongsToUser } from './access
 import { actualizarStats } from './estadisticas.service.js';
 import { evaluarLogrosSesion } from './logros.service.js';
 import {
+  calculateAdaptiveDifficulty,
+  calculateInActivityDifficulty,
+} from './dificultadAdaptativa.service.js';
+import {
   avanzarParticipacionSesionClase,
   cerrarSesionClaseSiTermino,
   ESTADOS_PARTICIPANTE_SESION,
@@ -29,7 +33,6 @@ import {
   publishRankingUpdated,
   publishStudentAccessChanged,
 } from '../realtime/realtime.events.js';
-import { executeIdempotent } from './student-idempotency.service.js';
 
 /** Resuelve el ID de una tabla catálogo por su nombre usando la PK correcta */
 const resolveCatalogId = async (table, pkColumn, nombre, executor = db) => {
@@ -78,6 +81,16 @@ const calcularEstrellasSesion = ({ aciertos = 0, errores = 0, estado = 'completa
 const SOCKET_EVENTS_BY_SLUG = Object.freeze({
   [CODIGO_ESTELAR_SLUG]: CODIGO_ESTELAR_SOCKET_EVENTS,
 });
+
+const ADAPTIVE_DIFFICULTY_POLICIES = Object.freeze({
+  [MERCADO_INTELIGENTE_SLUG]: Object.freeze({
+    supportsHistoricalAdjustment: true,
+    supportsInActivityAdjustment: true,
+  }),
+});
+
+const resolveAdaptiveDifficultyPolicy = (minijuego) =>
+  minijuego?.slug ? ADAPTIVE_DIFFICULTY_POLICIES[minijuego.slug] ?? null : null;
 
 /**
  * Relee el estado vivo del estudiante y de su contexto de juego.
@@ -191,12 +204,12 @@ const resolveMinijuegoCatalog = async (minijuego_id, executor = db) => {
   return minijuego;
 };
 
-const resolveSuggestedDifficulty = async (estudiante_id, minijuego, executor = db) => {
-  const stats = await executor('estadisticas_habilidad')
-    .where({ estudiante_id, habilidad_id: minijuego.habilidad_id })
-    .first();
-
-  const recentSessions = await executor('sesiones_juego')
+const resolveRecentSessionsForAdaptiveDifficulty = (
+  estudiante_id,
+  minijuego,
+  executor = db
+) =>
+  executor('sesiones_juego')
     .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
     .where({
       'sesiones_juego.estudiante_id': estudiante_id,
@@ -215,6 +228,17 @@ const resolveSuggestedDifficulty = async (estudiante_id, minijuego, executor = d
     )
     .orderBy('sesiones_juego.finalizada_en', 'desc')
     .limit(3);
+
+const resolveLegacySuggestedDifficulty = async (estudiante_id, minijuego, executor = db) => {
+  const stats = await executor('estadisticas_habilidad')
+    .where({ estudiante_id, habilidad_id: minijuego.habilidad_id })
+    .first();
+
+  const recentSessions = await resolveRecentSessionsForAdaptiveDifficulty(
+    estudiante_id,
+    minijuego,
+    executor
+  );
 
   if (!stats || stats.total_intentos <= 0) {
     return {
@@ -292,14 +316,48 @@ const resolveSuggestedDifficulty = async (estudiante_id, minijuego, executor = d
   };
 };
 
-const resolveInitialDifficulty = async (
-  estudiante_id,
-  minijuego,
-  requestedDifficulty,
+const resolvePolicySuggestedDifficulty = async (estudiante_id, minijuego, executor = db) => {
+  const stats = await executor('estadisticas_habilidad')
+    .where({ estudiante_id, habilidad_id: minijuego.habilidad_id })
+    .first();
+  const recentSessions = await resolveRecentSessionsForAdaptiveDifficulty(
+    estudiante_id,
+    minijuego,
+    executor
+  );
+
+  return calculateAdaptiveDifficulty({ stats, recentSessions, minigame: minijuego });
+};
+
+const resolvePreviousActivitySession = (
+  { estudiante_id, minijuego_id, sesion_clase_id, orden_en_ruta },
   executor = db
-) => {
+) =>
+  executor('sesiones_juego')
+    .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
+    .where({
+      'sesiones_juego.estudiante_id': estudiante_id,
+      'sesiones_juego.minijuego_id': minijuego_id,
+      'sesiones_juego.sesion_clase_id': sesion_clase_id,
+    })
+    .where('sesiones_juego.orden_en_ruta', '<', orden_en_ruta)
+    .whereIn('estados_sesion.nombre', ['completado', 'abandonado'])
+    .select(
+      'sesiones_juego.id_sesion_juego',
+      'sesiones_juego.orden_en_ruta',
+      'sesiones_juego.dificultad',
+      'sesiones_juego.aciertos',
+      'sesiones_juego.errores',
+      'sesiones_juego.finalizada_en',
+      'estados_sesion.nombre as estado'
+    )
+    .orderBy('sesiones_juego.orden_en_ruta', 'desc')
+    .orderBy('sesiones_juego.finalizada_en', 'desc')
+    .first();
+
+const resolveManualDifficulty = (minijuego, requestedDifficulty) => {
   if (requestedDifficulty == null) {
-    return resolveSuggestedDifficulty(estudiante_id, minijuego, executor);
+    throw new AppError('El modo manual requiere una dificultad explicita', 400);
   }
 
   if (requestedDifficulty > minijuego.dificultad_maxima) {
@@ -319,6 +377,75 @@ const resolveInitialDifficulty = async (
       dificultad_maxima: minijuego.dificultad_maxima,
     },
   };
+};
+
+const annotateIgnoredRequestedDifficulty = (decision, requestedDifficulty) => {
+  if (requestedDifficulty == null) {
+    return decision;
+  }
+
+  return {
+    ...decision,
+    metricas: {
+      ...(decision.metricas ?? {}),
+      dificultad_enviada_por_cliente: requestedDifficulty,
+      dificultad_enviada_ignorada: true,
+    },
+  };
+};
+
+const resolveInitialDifficulty = async (
+  {
+    estudiante_id,
+    minijuego,
+    requestedDifficulty,
+    difficultyMode = 'adaptativo',
+    playableContext,
+  },
+  executor = db
+) => {
+  const adaptivePolicy = resolveAdaptiveDifficultyPolicy(minijuego);
+
+  if (!adaptivePolicy) {
+    if (requestedDifficulty == null) {
+      return resolveLegacySuggestedDifficulty(estudiante_id, minijuego, executor);
+    }
+
+    return resolveManualDifficulty(minijuego, requestedDifficulty);
+  }
+
+  if (difficultyMode === 'manual') {
+    return resolveManualDifficulty(minijuego, requestedDifficulty);
+  }
+
+  const currentOrder = playableContext?.sesion_paso_actual ?? 1;
+  const previousActivitySession =
+    adaptivePolicy.supportsInActivityAdjustment && currentOrder > 1
+      ? await resolvePreviousActivitySession(
+          {
+            estudiante_id,
+            minijuego_id: minijuego.id,
+            sesion_clase_id: playableContext?.sesion_clase_id ?? null,
+            orden_en_ruta: currentOrder,
+          },
+          executor
+        )
+      : null;
+
+  if (previousActivitySession) {
+    return annotateIgnoredRequestedDifficulty(
+      calculateInActivityDifficulty({
+        previousSession: previousActivitySession,
+        minigame: minijuego,
+      }),
+      requestedDifficulty
+    );
+  }
+
+  return annotateIgnoredRequestedDifficulty(
+    await resolvePolicySuggestedDifficulty(estudiante_id, minijuego, executor),
+    requestedDifficulty
+  );
 };
 
 const buildRealtimeConfig = (grupoId, minijuegoSlug) => {
@@ -545,6 +672,8 @@ const finalizarSesionInterna = async (
       aciertos: officialSummary.aciertos,
       errores: officialSummary.errores,
       combo_maximo: officialSummary.combo_maximo,
+      minijuego_id: sesionExistente.minijuego_id,
+      minijuego_slug: sesionExistente.minijuego_slug,
       estado,
     },
     executor
@@ -588,6 +717,7 @@ const finalizarSesionInterna = async (
 const resolveSessionForFinalization = async (sesion_id, estudiante_id, executor = db) =>
   executor('sesiones_juego')
     .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
+    .join('minijuegos', 'minijuegos.id_minijuego', 'sesiones_juego.minijuego_id')
     .where({
       'sesiones_juego.id_sesion_juego': sesion_id,
       'sesiones_juego.estudiante_id': estudiante_id,
@@ -596,12 +726,13 @@ const resolveSessionForFinalization = async (sesion_id, estudiante_id, executor 
       'sesiones_juego.id_sesion_juego',
       'sesiones_juego.estudiante_id',
       'sesiones_juego.dificultad',
+      'sesiones_juego.minijuego_id',
       'sesiones_juego.sesion_clase_id',
       'sesiones_juego.orden_en_ruta',
       'sesiones_juego.estado_id',
+      'minijuegos.slug as minijuego_slug',
       'estados_sesion.nombre as estado'
     )
-    .forUpdate('sesiones_juego')
     .first();
 
 /**
@@ -659,18 +790,9 @@ const buildPersistedOfficialSummary = (sesion) => ({
  */
 export const iniciar = async (
   estudiante_id,
-  { minijuego_id, dificultad: requestedDifficulty, attempt_id }
+  { minijuego_id, dificultad: requestedDifficulty, modo_dificultad: difficultyMode = 'adaptativo' }
 ) => {
   return db.transaction(async (trx) => {
-    const idempotency = await executeIdempotent(
-      {
-        estudianteId: estudiante_id,
-        operacion: 'attempt',
-        key: attempt_id,
-        payload: { minijuego_id, dificultad: requestedDifficulty },
-        executor: trx,
-      },
-      async () => {
     let playableContext = await resolvePlayableStudentContext(estudiante_id, trx);
     assertPlayableStudentContext(playableContext);
 
@@ -698,9 +820,13 @@ export const iniciar = async (
 
     const minijuego = await resolveMinijuegoCatalog(selectedMinigameId, trx);
     const adaptationDecision = await resolveInitialDifficulty(
-      estudiante_id,
-      minijuego,
-      requestedDifficulty,
+      {
+        estudiante_id,
+        minijuego,
+        requestedDifficulty,
+        difficultyMode,
+        playableContext,
+      },
       trx
     );
     const dificultad = adaptationDecision.dificultad;
@@ -715,6 +841,7 @@ export const iniciar = async (
       ...gameConfig,
       adaptacion: {
         fuente: adaptationDecision.fuente,
+        decision: adaptationDecision.decision ?? null,
         motivo: adaptationDecision.motivo,
         metricas: adaptationDecision.metricas,
       },
@@ -760,10 +887,6 @@ export const iniciar = async (
       nivelEnBloque: playableContext.sesion_nivel_en_bloque ?? 1,
       gameConfig: effectiveGameConfig,
     });
-      }
-    );
-
-    return idempotency.value;
   });
 };
 
@@ -773,68 +896,21 @@ export const iniciar = async (
 export const registrarEvento = async (
   sesion_id,
   estudiante_id,
-  {
-    event_id,
-    sequence,
-    tipo_evento,
-    habilidad,
-    tiempo_reaccion_ms,
-    puntos,
-    combo_en_evento,
-    metadata,
-  }
+  { tipo_evento, habilidad, tiempo_reaccion_ms, puntos, combo_en_evento, metadata }
 ) => {
-  return db.transaction(async (trx) => {
-    const idempotency = await executeIdempotent(
-      {
-        estudianteId: estudiante_id,
-        operacion: 'event',
-        key: event_id,
-        payload: {
-          sesion_id,
-          sequence,
-          tipo_evento,
-          habilidad,
-          tiempo_reaccion_ms,
-          puntos,
-          combo_en_evento,
-          metadata,
-        },
-        executor: trx,
-      },
-      async () => {
-  const sesion = await trx('sesiones_juego')
+  const sesion = await db('sesiones_juego')
     .where({ id_sesion_juego: sesion_id, estudiante_id })
-    .forUpdate()
     .first();
   if (!sesion) throw new AppError('Sesión no encontrada', 404);
 
-  const activo_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'activo', trx);
+  const activo_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'activo');
   if (sesion.estado_id !== activo_id) throw new AppError('La sesión ya no está activa', 409);
 
-  if (sequence != null) {
-    const existingSequence = await trx('eventos_sesion')
-      .where({ sesion_id, client_sequence: sequence })
-      .select('id_evento_sesion')
-      .first();
-
-    if (existingSequence) {
-      throw new AppError('La secuencia del evento ya fue utilizada', 409, {
-        code: 'IDEMPOTENCY_CONFLICT',
-      });
-    }
-  }
-
-  const tipo_evento_id = await resolveCatalogId(
-    'tipos_evento',
-    'id_tipo_evento',
-    tipo_evento,
-    trx
-  );
+  const tipo_evento_id = await resolveCatalogId('tipos_evento', 'id_tipo_evento', tipo_evento);
 
   let habilidad_id = null;
   if (habilidad) {
-    const habilidadRecord = await trx('habilidades')
+    const habilidadRecord = await db('habilidades')
       .where({ nombre: habilidad })
       .select('id_habilidad')
       .first();
@@ -847,7 +923,7 @@ export const registrarEvento = async (
   }
 
   if (sesion.sesion_clase_id != null) {
-    const sesionClase = await trx('sesiones_clase')
+    const sesionClase = await db('sesiones_clase')
       .where({ id_sesion_clase: sesion.sesion_clase_id })
       .select('estado')
       .first();
@@ -857,10 +933,9 @@ export const registrarEvento = async (
     }
   }
 
-  const [evento] = await trx('eventos_sesion')
+  const [evento] = await db('eventos_sesion')
     .insert({
       sesion_id,
-      client_sequence: sequence ?? null,
       tipo_evento_id,
       habilidad_id,
       tiempo_reaccion_ms: tiempo_reaccion_ms ?? null,
@@ -871,11 +946,6 @@ export const registrarEvento = async (
     .returning('id_evento_sesion');
 
   return evento;
-      }
-    );
-
-    return idempotency.value;
-  });
 };
 
 /**
@@ -884,41 +954,16 @@ export const registrarEvento = async (
 export const finalizar = async (
   sesion_id,
   estudiante_id,
-  options = {},
+  { estado = 'completado', cerrarSesionClase = true } = {},
   executor = db
 ) => {
-  const {
-    estado = 'completado',
-    cerrarSesionClase = true,
-    finalization_id,
-  } = options;
-
   if (executor === db) {
-    const idempotency = await db.transaction((trx) =>
-      executeIdempotent(
-        {
-          estudianteId: estudiante_id,
-          operacion: 'finalization',
-          key: finalization_id,
-          payload: { sesion_id, ...options },
-          executor: trx,
-        },
-        () => finalizarSesionInterna(
-          sesion_id,
-          estudiante_id,
-          { estado, cerrarSesionClase },
-          trx
-        )
-      )
+    const result = await db.transaction((trx) =>
+      finalizarSesionInterna(sesion_id, estudiante_id, { estado, cerrarSesionClase }, trx)
     );
 
-    if (!idempotency.replayed) {
-      await emitPostFinalizationRealtimeUpdates({
-        result: idempotency.value,
-        studentId: estudiante_id,
-      });
-    }
-    return idempotency.value;
+    await emitPostFinalizationRealtimeUpdates({ result, studentId: estudiante_id });
+    return result;
   }
 
   return finalizarSesionInterna(
@@ -928,91 +973,6 @@ export const finalizar = async (
     executor
   );
 };
-
-export const obtenerCheckpoint = async (sesion_id, estudiante_id) => {
-  const session = await db('sesiones_juego')
-    .where({ id_sesion_juego: sesion_id, estudiante_id })
-    .select('id_sesion_juego')
-    .first();
-  if (!session) throw new AppError('Sesión no encontrada', 404);
-
-  const checkpoint = await db('student_game_checkpoints')
-    .where({ sesion_id, estudiante_id })
-    .first();
-
-  return checkpoint
-    ? {
-        session_id: sesion_id,
-        version: checkpoint.version,
-        state: checkpoint.estado,
-        updated_at: checkpoint.actualizada_en,
-      }
-    : { session_id: sesion_id, version: 0, state: {}, updated_at: null };
-};
-
-export const guardarCheckpoint = async (
-  sesion_id,
-  estudiante_id,
-  { expected_version, state }
-) =>
-  db.transaction(async (trx) => {
-    const session = await trx('sesiones_juego as sj')
-      .join('estados_sesion as es', 'es.id_estado_sesion', 'sj.estado_id')
-      .where({
-        'sj.id_sesion_juego': sesion_id,
-        'sj.estudiante_id': estudiante_id,
-      })
-      .select('sj.id_sesion_juego', 'es.nombre as estado')
-      .forUpdate('sj')
-      .first();
-
-    if (!session) throw new AppError('Sesión no encontrada', 404);
-    if (session.estado !== 'activo') {
-      throw new AppError('La sesión ya no está activa', 409, {
-        code: 'GAME_SESSION_NOT_ACTIVE',
-      });
-    }
-
-    const current = await trx('student_game_checkpoints')
-      .where({ sesion_id, estudiante_id })
-      .forUpdate()
-      .first();
-    const currentVersion = Number(current?.version ?? 0);
-
-    if (currentVersion !== expected_version) {
-      throw new AppError('El checkpoint fue actualizado por otra solicitud', 409, {
-        code: 'CHECKPOINT_VERSION_CONFLICT',
-        current_version: currentVersion,
-        current_checkpoint: current?.estado ?? {},
-      });
-    }
-
-    const nextVersion = currentVersion + 1;
-    const [saved] = current
-      ? await trx('student_game_checkpoints')
-          .where({ sesion_id, estudiante_id, version: expected_version })
-          .update({
-            version: nextVersion,
-            estado: state,
-            actualizada_en: trx.fn.now(),
-          })
-          .returning('*')
-      : await trx('student_game_checkpoints')
-          .insert({
-            sesion_id,
-            estudiante_id,
-            version: nextVersion,
-            estado: state,
-          })
-          .returning('*');
-
-    return {
-      session_id: sesion_id,
-      version: saved.version,
-      state: saved.estado,
-      updated_at: saved.actualizada_en,
-    };
-  });
 
 /**
  * Finaliza en lote varias sesiones autoritativas de una misma sala.
@@ -1131,10 +1091,8 @@ export const detalleEventos = async (sesion_id, user) => {
       'eventos_sesion.tiempo_reaccion_ms',
       'eventos_sesion.puntos',
       'eventos_sesion.combo_en_evento',
-      'eventos_sesion.client_sequence as sequence',
       'eventos_sesion.metadata',
       'eventos_sesion.ocurrido_en'
     )
-    .orderByRaw('eventos_sesion.client_sequence ASC NULLS LAST')
     .orderBy('eventos_sesion.ocurrido_en', 'asc');
 };

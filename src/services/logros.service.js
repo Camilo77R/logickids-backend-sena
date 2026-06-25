@@ -1,6 +1,7 @@
 import { db } from '../config/db.js';
 import { AppError } from '../middlewares/errorHandler.js';
 import { assertStudentBelongsToUser } from './access.service.js';
+import { resolveAchievementKeysForSession } from './logros.rules.js';
 
 const logroFields = [
   'logros.id_logro as id',
@@ -18,10 +19,121 @@ const resolveCatalogLogroId = async (clave, executor = db) => {
     .first();
 
   if (!logro) {
-    throw new AppError('El logro solicitado no existe', 404);
+    return null;
   }
 
   return logro.id_catalogo_logro;
+};
+
+const resolveCompletedSessionStateId = async (executor = db) => {
+  const estado = await executor('estados_sesion')
+    .where({ nombre: 'completado' })
+    .select('id_estado_sesion')
+    .first();
+
+  if (!estado) {
+    throw new AppError('No existe el estado de sesion completado', 500);
+  }
+
+  return estado.id_estado_sesion;
+};
+
+const findUnlockedAchievement = (estudiante_id, catalogo_logro_id, executor = db) =>
+  executor('logros')
+    .join('catalogo_logros', 'catalogo_logros.id_catalogo_logro', 'logros.catalogo_logro_id')
+    .where({
+      'logros.estudiante_id': estudiante_id,
+      'logros.catalogo_logro_id': catalogo_logro_id,
+    })
+    .select(logroFields)
+    .first();
+
+const insertAchievementUnlockIfMissing = async (
+  estudiante_id,
+  catalogo_logro_id,
+  executor = db
+) => {
+  const result = await executor.raw(
+    `
+      INSERT INTO logros (estudiante_id, catalogo_logro_id)
+      VALUES (?, ?)
+      ON CONFLICT (estudiante_id, catalogo_logro_id) DO NOTHING
+      RETURNING id_logro
+    `,
+    [estudiante_id, catalogo_logro_id]
+  );
+
+  return result.rows?.[0]?.id_logro ?? null;
+};
+
+const desbloquearSiEsNuevo = async (estudiante_id, clave_logro, executor = db) => {
+  const catalogo_logro_id = await resolveCatalogLogroId(clave_logro, executor);
+
+  if (!catalogo_logro_id) {
+    return null;
+  }
+
+  const insertedId = await insertAchievementUnlockIfMissing(
+    estudiante_id,
+    catalogo_logro_id,
+    executor
+  );
+
+  if (!insertedId) {
+    return null;
+  }
+
+  return findUnlockedAchievement(estudiante_id, catalogo_logro_id, executor);
+};
+
+const buildAchievementEvaluationContext = async (
+  estudiante_id,
+  {
+    aciertos = 0,
+    errores = 0,
+    combo_maximo = 0,
+    minijuego_id = null,
+    minijuego_slug = null,
+  },
+  executor = db
+) => {
+  const total_intentos = aciertos + errores;
+  const precision = total_intentos > 0 ? (aciertos / total_intentos) * 100 : 0;
+  const estadoCompletadoId = await resolveCompletedSessionStateId(executor);
+
+  const totalSesiones = await executor('sesiones_juego')
+    .where({
+      estudiante_id,
+      estado_id: estadoCompletadoId,
+    })
+    .count('id_sesion_juego as total_sesiones')
+    .first();
+
+  const totalSesionesPorJuego = Number.isInteger(minijuego_id)
+    ? await executor('sesiones_juego')
+        .where({
+          estudiante_id,
+          estado_id: estadoCompletadoId,
+          minijuego_id,
+        })
+        .count('id_sesion_juego as total_sesiones')
+        .first()
+    : { total_sesiones: null };
+
+  return {
+    aciertos,
+    errores,
+    combo_maximo,
+    minijuego_id,
+    minijuego_slug,
+    precision,
+    total_intentos,
+    total_completed_sessions: Number(totalSesiones?.total_sesiones ?? 0),
+    total_completed_sessions_in_minijuego:
+      totalSesionesPorJuego?.total_sesiones == null
+        ? null
+        : Number(totalSesionesPorJuego.total_sesiones),
+  };
 };
 
 /**
@@ -66,68 +178,37 @@ export const listarPorEstudiante = (estudiante_id) =>
     .select(logroFields)
     .orderBy('logros.desbloqueado_en', 'desc');
 
-export const desbloquear = async (estudiante_id, clave_logro, executor = db) => {
-  const catalogo_logro_id = await resolveCatalogLogroId(clave_logro, executor);
-
-  await executor('logros')
-    .insert({ estudiante_id, catalogo_logro_id })
-    .onConflict(['estudiante_id', 'catalogo_logro_id'])
-    .ignore();
-
-  return executor('logros')
-    .join('catalogo_logros', 'catalogo_logros.id_catalogo_logro', 'logros.catalogo_logro_id')
-    .where({
-      'logros.estudiante_id': estudiante_id,
-      'logros.catalogo_logro_id': catalogo_logro_id,
-    })
-    .select(logroFields)
-    .first();
-};
-
 export const evaluarLogrosSesion = async (
   estudiante_id,
-  { aciertos = 0, errores = 0, combo_maximo = 0, estado = 'completado' },
+  {
+    aciertos = 0,
+    errores = 0,
+    combo_maximo = 0,
+    estado = 'completado',
+    minijuego_id = null,
+    minijuego_slug = null,
+  },
   executor = db
 ) => {
   if (estado !== 'completado') {
     return [];
   }
 
-  const claves = [];
-  const total_intentos = aciertos + errores;
-  const precision = total_intentos > 0 ? (aciertos / total_intentos) * 100 : 0;
-
-  const { id_estado_sesion } = await executor('estados_sesion')
-    .where({ nombre: 'completado' })
-    .select('id_estado_sesion')
-    .first();
-
-  const [{ total_sesiones }] = await executor('sesiones_juego')
-    .where({
-      estudiante_id,
-      estado_id: id_estado_sesion,
-    })
-    .count('id_sesion_juego as total_sesiones');
-
-  if (Number(total_sesiones) === 1) {
-    claves.push('primer_intento');
-  }
-
-  if (combo_maximo >= 5) {
-    claves.push('combo_5');
-  }
-
-  if (precision >= 90) {
-    claves.push('precision_90');
-  }
-
-  if (Number(total_sesiones) >= 10) {
-    claves.push('maratonista');
-  }
+  const context = await buildAchievementEvaluationContext(
+    estudiante_id,
+    {
+      aciertos,
+      errores,
+      combo_maximo,
+      minijuego_id,
+      minijuego_slug,
+    },
+    executor
+  );
 
   const unlocked = [];
-  for (const clave of [...new Set(claves)]) {
-    const logro = await desbloquear(estudiante_id, clave, executor);
+  for (const clave of resolveAchievementKeysForSession(context)) {
+    const logro = await desbloquearSiEsNuevo(estudiante_id, clave, executor);
     if (logro) {
       unlocked.push(logro);
     }
