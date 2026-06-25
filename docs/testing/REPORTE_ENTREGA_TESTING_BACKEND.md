@@ -35,7 +35,6 @@ Se subieron estos commits en la rama `TEST-PRUEBAS-BACKEND-COMPLETA`:
 ```text
 ee6cad8 test: cerrar pruebas backend por capas
 75ed71e docs: agregar reporte de entrega testing backend
-55ae603 docs: agregar monitor de calidad de agentes
 806040f docs: mejorar guia de testing por capas para equipo
 ```
 
@@ -45,10 +44,8 @@ La rama incluye:
 2. scripts para ejecutar pruebas por capa
 3. README del backend actualizado con la seccion de testing
 4. documentacion oficial en `docs/testing`
-5. agentes de apoyo en `.agents`
-6. evidencia de cierre por capas
-7. guia explicada para que el equipo adapte el metodo a backend, frontend o movil
-8. agente monitor para auditar que los demas agentes cumplan con evidencia
+5. evidencia de cierre por capas
+6. guia explicada para que el equipo adapte el metodo a backend, frontend o movil
 
 ## Donde quedo cada cosa
 
@@ -71,19 +68,7 @@ docs/testing/README.md
 docs/testing/ESTADO_CAPAS_BACKEND.md
 docs/testing/GUIA_PRACTICAS_TESTING_POR_CAPAS.md
 docs/testing/MODULOS_REGLAS_CASOS_COBERTURA.md
-docs/testing/AGENTES_TESTING_BACKEND.md
 docs/testing/REPORTE_ENTREGA_TESTING_BACKEND.md
-```
-
-### Agentes
-
-```text
-.agents/backend-cierre-capas-auditor.md
-.agents/backend-suite-verificador.md
-.agents/backend-limpieza-segura-revisor.md
-.agents/backend-documentador-oficial.md
-.agents/backend-sync-develop-integrador.md
-.agents/backend-monitor-calidad-agentes.md
 ```
 
 ### Tests nuevos principales
@@ -239,42 +224,6 @@ npm run test:capa5
 npm run test:capa6
 npm run test:capas:cerradas
 ```
-
-## Agentes creados
-
-### Auditor de cierre de capas
-
-Revisa que cada capa tenga pruebas, comando y evidencia. No aprueba capas si
-la suite falla.
-
-### Verificador de suite backend
-
-Ejecuta `npm run test:backend:full` y reporta si el backend sigue al 100%.
-
-### Revisor de limpieza segura
-
-Revisa archivos sospechosos o basura, pero no borra nada sin preguntarse si
-afecta producto, tests, documentacion o trabajo de otra persona.
-
-### Documentador oficial
-
-Mantiene actualizada la documentacion de testing, especialmente lo que ya esta
-probado y verde.
-
-### Integrador de cambios desde develop
-
-Cuando llegan cambios de `develop`, revisa nuevos modulos, reglas o endpoints,
-resuelve conflictos con cuidado y actualiza pruebas/documentacion si aplica.
-
-### Monitor de calidad de agentes
-
-Audita que los demas agentes cumplan con evidencia real. Revisa especialmente:
-
-1. que el documentador oficial mantenga los MD actualizados
-2. que el integrador de `develop` detecte modulos, reglas, conflictos y pruebas afectadas
-3. que tests y configuracion sean coherentes
-4. que no se apruebe una capa sin comandos verdes
-5. que el estado sea `APROBADO`, `APROBADO CON OBSERVACIONES`, `REQUIERE AJUSTES` o `BLOQUEADO`
 
 ## Que falta
 
