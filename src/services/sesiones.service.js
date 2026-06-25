@@ -29,6 +29,10 @@ import {
   MERCADO_INTELIGENTE_SLUG,
 } from '../games/mercadoInteligente/mercadoInteligente.config.js';
 import {
+  buildRobotLogicoGameConfig,
+  ROBOT_LOGICO_SLUG,
+} from '../games/robotLogico/robotLogico.config.js';
+import {
   publishClassSessionChanged,
   publishRankingUpdated,
   publishStudentAccessChanged,
@@ -84,6 +88,10 @@ const SOCKET_EVENTS_BY_SLUG = Object.freeze({
 
 const ADAPTIVE_DIFFICULTY_POLICIES = Object.freeze({
   [MERCADO_INTELIGENTE_SLUG]: Object.freeze({
+    supportsHistoricalAdjustment: true,
+    supportsInActivityAdjustment: true,
+  }),
+  [ROBOT_LOGICO_SLUG]: Object.freeze({
     supportsHistoricalAdjustment: true,
     supportsInActivityAdjustment: true,
   }),
@@ -481,6 +489,8 @@ const buildGameConfig = (grupoId, minijuego, dificultad, configuracionBase = {})
       return buildCaminoArGameConfig(dificultad, configuracionNormalizada);
     case MERCADO_INTELIGENTE_SLUG:
       return buildMercadoInteligenteGameConfig(dificultad, configuracionNormalizada);
+    case ROBOT_LOGICO_SLUG:
+      return buildRobotLogicoGameConfig(dificultad, configuracionNormalizada);
     default:
       return { ...configuracionNormalizada, dificultad };
   }
