@@ -235,7 +235,7 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 // Request
 { "puntaje": 1200, "aciertos": 8, "errores": 2, "combo_maximo": 5, "dificultad": 2, "estado": "completado" }
 
-// Response 200 - incluye logros desbloqueados para pantalla de resultados
+// Response 200 - incluye solo logros nuevos desbloqueados en esa finalizacion
 {
   "success": true,
   "data": {
@@ -266,11 +266,11 @@ superadmin  ->  gestiona instituciones y minijuegos (acceso global)
 
 | Metodo | Ruta | Auth | Descripcion |
 |---|---|---|---|
-| GET | `/api/logros/catalogo` | Publica | Catalogo de logros activos. Con ?estudiante_id= marca cuales tiene |
+| GET | `/api/logros/catalogo` | Publica | Catalogo de logros activos. Con ?estudiante_id= requiere sesion valida y marca cuales tiene |
 | GET | `/api/logros/mis-logros` | JWT Estudiante | Logros desbloqueados del estudiante autenticado |
 | GET | `/api/logros/estudiante/:id` | JWT Tutor | Logros de un estudiante especifico |
 
-**GET /api/logros/catalogo?estudiante_id=22**
+**GET /api/logros/catalogo?estudiante_id=22** (requiere sesion del propio estudiante o de un tutor autorizado)
 ```json
 {
   "success": true,
