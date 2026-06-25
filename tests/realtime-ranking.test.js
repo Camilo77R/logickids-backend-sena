@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer } from 'http';
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { io as createSocketClient } from 'socket.io-client';
 import app from '../src/app.js';
@@ -106,7 +107,7 @@ const createStudentForExistingGroup = async ({
     .post('/api/estudiantes/login')
     .send({
       qr_token: qrRes.body.data.qr_token,
-      installation_id: `ranking-${suffix}`,
+      installation_id: randomUUID(),
       app_version: 'test',
     });
 
@@ -377,6 +378,76 @@ describe('🏆 Ranking oficial y realtime', () => {
     expect(myRankingRes.body.data.mi_posicion.posicion).toBe(2);
     expect(myRankingRes.body.data.top3).toHaveLength(2);
     expect(myRankingRes.body.data.top3[0].estudiante_id).toBe(secondStudent.studentId);
+  }, 45_000);
+
+  it('✅ separa estudiantes sin participacion sin asignarles posicion competitiva', async () => {
+    const minijuegoId = await resolveCodigoEstelarId();
+    const fixture = await provisionPlayableStudent({ openClass: false });
+    const secondStudent = await createStudentForExistingGroup({
+      adminToken: fixture.adminToken,
+      tutorToken: fixture.tutorToken,
+      groupId: fixture.groupId,
+      suffix: 'sin-participacion-b',
+    });
+    const thirdStudent = await createStudentForExistingGroup({
+      adminToken: fixture.adminToken,
+      tutorToken: fixture.tutorToken,
+      groupId: fixture.groupId,
+      suffix: 'sin-participacion-c',
+    });
+
+    await openSingleClass({
+      tutorToken: fixture.tutorToken,
+      groupId: fixture.groupId,
+      minijuegoId,
+      niveles: 1,
+    });
+
+    const playedSession = await startCodigoEstelarSession({
+      studentToken: fixture.studentToken,
+      minijuegoId,
+      dificultad: 2,
+    });
+
+    expect(playedSession.status).toBe(201);
+
+    await registerEventsAndFinalize({
+      studentToken: fixture.studentToken,
+      sessionId: playedSession.body.data.sesion.id,
+      events: [{ tipo_evento: 'acierto', puntos: 12, combo_en_evento: 1 }],
+      finalPayload: {
+        puntaje: 100,
+      },
+    });
+
+    const rankingRes = await request(app)
+      .get(`/api/grupos/${fixture.groupId}/ranking`)
+      .set(authHeader(fixture.tutorToken));
+
+    expect(rankingRes.status).toBe(200);
+    expect(rankingRes.body.success).toBe(true);
+    expect(rankingRes.body.data.total_participantes).toBe(3);
+    expect(rankingRes.body.data.total_con_participacion).toBe(1);
+    expect(rankingRes.body.data.total_sin_participacion).toBe(2);
+    expect(rankingRes.body.data.top3).toHaveLength(1);
+
+    const [leader, firstPending, secondPending] = rankingRes.body.data.ranking;
+    expect(leader.estudiante_id).toBe(fixture.studentId);
+    expect(leader.posicion).toBe(1);
+    expect(leader.participacion).toBe(true);
+    expect(leader.esta_en_top3).toBe(true);
+
+    expect(firstPending.participacion).toBe(false);
+    expect(firstPending.posicion).toBeNull();
+    expect(firstPending.puntaje).toBe(0);
+
+    expect(secondPending.participacion).toBe(false);
+    expect(secondPending.posicion).toBeNull();
+    expect(secondPending.puntaje).toBe(0);
+
+    const pendingIds = [firstPending.estudiante_id, secondPending.estudiante_id].sort();
+    expect(pendingIds).toEqual([secondStudent.studentId, thirdStudent.studentId].sort());
+    expect(rankingRes.body.data.resto).toHaveLength(2);
   }, 45_000);
 
   it(
