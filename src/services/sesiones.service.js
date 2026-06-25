@@ -33,6 +33,10 @@ import {
   TREN_FIGURAS_SLUG,
 } from '../games/trenFiguras/trenFiguras.config.js';
 import {
+  buildRobotLogicoGameConfig,
+  ROBOT_LOGICO_SLUG,
+} from '../games/robotLogico/robotLogico.config.js';
+import {
   publishClassSessionChanged,
   publishRankingUpdated,
   publishStudentAccessChanged,
@@ -97,6 +101,10 @@ const ADAPTIVE_DIFFICULTY_POLICIES = Object.freeze({
     supportsInActivityAdjustment: true,
   }),
   [TREN_FIGURAS_SLUG]: Object.freeze({
+    supportsHistoricalAdjustment: true,
+    supportsInActivityAdjustment: true,
+  }),
+  [ROBOT_LOGICO_SLUG]: Object.freeze({
     supportsHistoricalAdjustment: true,
     supportsInActivityAdjustment: true,
   }),
@@ -370,6 +378,8 @@ const buildGameConfig = (grupoId, minijuego, dificultad, configuracionBase = {})
       return buildMercadoInteligenteGameConfig(dificultad, configuracionNormalizada);
     case TREN_FIGURAS_SLUG:
       return buildTrenFigurasGameConfig(dificultad, configuracionNormalizada);
+    case ROBOT_LOGICO_SLUG:
+      return buildRobotLogicoGameConfig(dificultad, configuracionNormalizada);
     default:
       return { ...configuracionNormalizada, dificultad };
   }
