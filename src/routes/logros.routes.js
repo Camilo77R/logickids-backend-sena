@@ -11,6 +11,7 @@ router.get('/catalogo', attachOptionalSession, ctrl.catalogo);
 
 // Rutas del estudiante autenticado
 router.get('/mis-logros', requireEstudiante, ctrl.misLogros);
+router.get('/summary', requireEstudiante, ctrl.resumen);
 router.post(
   '/desbloquear',
   requireEstudiante,
