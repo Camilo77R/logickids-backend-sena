@@ -37,6 +37,10 @@ import {
   ROBOT_LOGICO_SLUG,
 } from '../games/robotLogico/robotLogico.config.js';
 import {
+  buildObjetoPerdidoGameConfig,
+  OBJETO_PERDIDO_SLUG,
+} from '../games/objetoPerdido/objetoPerdido.config.js';
+import {
   publishClassSessionChanged,
   publishRankingUpdated,
   publishStudentAccessChanged,
@@ -105,6 +109,10 @@ const ADAPTIVE_DIFFICULTY_POLICIES = Object.freeze({
     supportsInActivityAdjustment: true,
   }),
   [ROBOT_LOGICO_SLUG]: Object.freeze({
+    supportsHistoricalAdjustment: true,
+    supportsInActivityAdjustment: true,
+  }),
+  [OBJETO_PERDIDO_SLUG]: Object.freeze({
     supportsHistoricalAdjustment: true,
     supportsInActivityAdjustment: true,
   }),
@@ -380,9 +388,53 @@ const buildGameConfig = (grupoId, minijuego, dificultad, configuracionBase = {})
       return buildTrenFigurasGameConfig(dificultad, configuracionNormalizada);
     case ROBOT_LOGICO_SLUG:
       return buildRobotLogicoGameConfig(dificultad, configuracionNormalizada);
+    case OBJETO_PERDIDO_SLUG:
+      return buildObjetoPerdidoGameConfig(dificultad, configuracionNormalizada);
     default:
       return { ...configuracionNormalizada, dificultad };
   }
+};
+
+const buildMercadoRoundSeed = ({
+  estudianteId,
+  sesionClaseId,
+  ordenEnRuta,
+  dificultad,
+}) => {
+  const seed =
+    Number(estudianteId ?? 0) * 31 +
+    Number(sesionClaseId ?? 0) * 17 +
+    Number(ordenEnRuta ?? 1) * 13 +
+    Number(dificultad ?? 1) * 7;
+
+  return Math.abs(seed) % 97;
+};
+
+const buildSessionGameConfigBase = ({
+  estudianteId,
+  minijuego,
+  dificultad,
+  playableContext,
+}) => {
+  const baseConfig =
+    playableContext.sesion_configuracion_base &&
+    typeof playableContext.sesion_configuracion_base === 'object'
+      ? playableContext.sesion_configuracion_base
+      : {};
+
+  if (minijuego.slug !== 'mercado-inteligente') {
+    return baseConfig;
+  }
+
+  return {
+    ...baseConfig,
+    semilla_ronda: buildMercadoRoundSeed({
+      estudianteId,
+      sesionClaseId: playableContext.sesion_clase_id,
+      ordenEnRuta: playableContext.sesion_paso_actual ?? 1,
+      dificultad,
+    }),
+  };
 };
 
 const buildSessionStartResponse = ({
@@ -763,11 +815,17 @@ export const iniciar = async (
     }
     const dificultad = adaptationDecision.dificultad;
     const fuenteAdaptacion = adaptationDecision.fuente;
+    const sessionGameConfigBase = buildSessionGameConfigBase({
+      estudianteId: estudiante_id,
+      minijuego,
+      dificultad,
+      playableContext,
+    });
     const gameConfig = buildGameConfig(
       playableContext.grupo_id,
       minijuego,
       dificultad,
-      playableContext.sesion_configuracion_base
+      sessionGameConfigBase
     );
     const appliedConfig = {
       ...gameConfig,

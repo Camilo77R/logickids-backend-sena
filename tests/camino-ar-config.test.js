@@ -11,9 +11,10 @@ describe('Camino AR - contrato de dificultad', () => {
 
     expect(Object.keys(CAMINO_AR_DIFFICULTY_PRESETS)).toHaveLength(4);
     expect(levelFour.cantidad_baldosas).toBeGreaterThan(levelOne.cantidad_baldosas);
-    expect(levelFour.longitud_patron).toBeGreaterThan(levelOne.longitud_patron);
+    expect(levelFour.longitud_patron).toBe(5);
+    expect(levelFour.longitud_patron).toBeLessThanOrEqual(5);
     expect(levelFour.duracion_destello_ms).toBeLessThan(levelOne.duracion_destello_ms);
-    expect(levelFour.duracion_destello_ms).toBeGreaterThanOrEqual(600);
+    expect(levelFour.duracion_destello_ms).toBeGreaterThanOrEqual(900);
     expect(levelFour.ayudas_disponibles).toBeLessThan(levelOne.ayudas_disponibles);
   });
 
@@ -28,7 +29,7 @@ describe('Camino AR - contrato de dificultad', () => {
     expect(config).toMatchObject({
       dificultad: 3,
       longitud_patron: 5,
-      duracion_destello_ms: 700,
+      duracion_destello_ms: 1000,
       tema: 'bosque',
     });
   });

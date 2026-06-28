@@ -1,4 +1,6 @@
 import { evaluateCaminoArMission } from '../caminoAr/caminoAr.adaptation.js';
+import { evaluateMercadoInteligenteMission } from '../mercadoInteligente/mercadoInteligente.adaptation.js';
+import { evaluateObjetoPerdidoMission } from '../objetoPerdido/objetoPerdido.adaptation.js';
 import { evaluateTrenFigurasMission } from '../trenFiguras/trenFiguras.adaptation.js';
 
 const POLICIES_BY_SLUG = Object.freeze({
@@ -6,6 +8,14 @@ const POLICIES_BY_SLUG = Object.freeze({
   'tren-figuras': Object.freeze({
     inActivity: evaluateTrenFigurasMission,
     historical: evaluateTrenFigurasMission,
+  }),
+  'mercado-inteligente': Object.freeze({
+    inActivity: evaluateMercadoInteligenteMission,
+    historical: evaluateMercadoInteligenteMission,
+  }),
+  'objeto-perdido': Object.freeze({
+    inActivity: evaluateObjetoPerdidoMission,
+    historical: evaluateObjetoPerdidoMission,
   }),
 });
 

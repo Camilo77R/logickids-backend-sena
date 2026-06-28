@@ -1,5 +1,7 @@
 export const MERCADO_INTELIGENTE_SLUG = 'mercado-inteligente';
 
+const DEFAULT_ROUND_VARIATION_SEED = 0;
+
 export const MERCADO_INTELIGENTE_DIFFICULTY_PRESETS = Object.freeze({
   1: Object.freeze({
     rondas_por_partida: 1,
@@ -53,10 +55,14 @@ export const buildMercadoInteligenteGameConfig = (dificultad, configuracionBase 
     : 4;
   const preset =
     MERCADO_INTELIGENTE_DIFFICULTY_PRESETS[dificultadNormalizada];
+  const roundVariationSeed = Number(configuracionBase.semilla_ronda);
 
   return {
     ...preset,
     ...configuracionBase,
     dificultad: dificultadNormalizada,
+    semilla_ronda: Number.isInteger(roundVariationSeed) && roundVariationSeed >= 0
+      ? roundVariationSeed
+      : DEFAULT_ROUND_VARIATION_SEED,
   };
 };
