@@ -781,9 +781,17 @@ export const iniciar = async (
     }
 
     const minijuego = await resolveMinijuegoCatalog(selectedMinigameId, trx);
+    const adaptivePolicy = resolveAdaptiveDifficultyPolicy(minijuego);
+    const effectiveDifficultyMode =
+      difficultyMode === 'manual' ||
+      (!adaptivePolicy && requestedDifficulty != null)
+        ? 'manual'
+        : 'adaptativo';
     const currentOrder = playableContext.sesion_paso_actual ?? 1;
     const previousActivitySession =
-      difficultyMode !== 'manual' && currentOrder > 1
+      effectiveDifficultyMode !== 'manual' &&
+      adaptivePolicy?.supportsInActivityAdjustment === true &&
+      currentOrder > 1
         ? await resolvePreviousActivitySession(
             {
               estudiante_id,
@@ -803,7 +811,7 @@ export const iniciar = async (
           estudiante_id,
           minijuego,
           requestedDifficulty,
-          difficultyMode,
+          effectiveDifficultyMode,
           trx
         );
 
