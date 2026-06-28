@@ -368,3 +368,142 @@ describe('adaptacion historica especializada de Tren de Figuras', () => {
     expect(result.metricas.vagones_pendientes).toBe(2);
   });
 });
+
+describe('adaptacion historica especializada de Mercado Inteligente', () => {
+  const mercado = {
+    slug: 'mercado-inteligente',
+    habilidad: 'Razonamiento',
+    dificultad_maxima: 4,
+  };
+  const recentMarketSession = ({ dificultad = 2, aciertos = 1, errores = 0, metadata = {} } = {}) => ({
+    dificultad,
+    aciertos,
+    errores,
+    estado: 'completado',
+    resultado_mision: metadata,
+  });
+
+  it('sube cuando la compra anterior fue perfecta', () => {
+    const result = calculateAdaptiveDifficulty({
+      stats: stats(72, 9),
+      recentSessions: [
+        recentMarketSession({
+          dificultad: 2,
+          metadata: {
+            totalGastado: 10,
+            correccion: false,
+          },
+        }),
+      ],
+      minigame: mercado,
+    });
+
+    expect(result.dificultad).toBe(3);
+    expect(result.decision).toBe('subir');
+    expect(result.metricas.alcance).toBe('historico_ultima_mision');
+  });
+
+  it('baja cuando la compra anterior necesito demasiados intentos', () => {
+    const result = calculateAdaptiveDifficulty({
+      stats: stats(85, 20),
+      recentSessions: [
+        recentMarketSession({
+          dificultad: 3,
+          aciertos: 1,
+          errores: 2,
+          metadata: {
+            totalGastado: 14,
+            correccion: true,
+          },
+        }),
+      ],
+      minigame: mercado,
+    });
+
+    expect(result.dificultad).toBe(2);
+    expect(result.decision).toBe('bajar');
+    expect(result.metricas.compra_corregida).toBe(true);
+  });
+});
+
+describe('adaptacion historica especializada de Objeto Perdido AR', () => {
+  const objetoPerdido = {
+    slug: 'objeto-perdido',
+    habilidad: 'Atencion',
+    dificultad_maxima: 4,
+  };
+  const recentSearchSession = ({
+    dificultad = 2,
+    aciertos = 1,
+    errores = 0,
+    estado = 'completado',
+    metadata = {},
+  } = {}) => ({
+    dificultad,
+    aciertos,
+    errores,
+    estado,
+    resultado_mision: metadata,
+  });
+
+  it('sube cuando encuentra la figura sin errores, sin pistas y con buen tiempo', () => {
+    const result = calculateAdaptiveDifficulty({
+      stats: stats(80, 12),
+      recentSessions: [
+        recentSearchSession({
+          dificultad: 2,
+          metadata: {
+            reason: 'objeto_encontrado',
+            ayudasUsadas: 0,
+            tiempoRestanteMs: 5200,
+          },
+        }),
+      ],
+      minigame: objetoPerdido,
+    });
+
+    expect(result.dificultad).toBe(3);
+    expect(result.decision).toBe('subir');
+    expect(result.metricas.politica_adaptacion).toBe('objeto-perdido');
+  });
+
+  it('baja cuando necesita varios intentos para encontrar el objetivo', () => {
+    const result = calculateAdaptiveDifficulty({
+      stats: stats(75, 12),
+      recentSessions: [
+        recentSearchSession({
+          dificultad: 3,
+          errores: 2,
+          metadata: {
+            reason: 'objeto_encontrado',
+            ayudasUsadas: 1,
+            tiempoRestanteMs: 1200,
+          },
+        }),
+      ],
+      minigame: objetoPerdido,
+    });
+
+    expect(result.dificultad).toBe(2);
+    expect(result.decision).toBe('bajar');
+    expect(result.metricas.ayudas_usadas_mision).toBe(1);
+  });
+
+  it('mantiene cuando encuentra el objeto usando pista o con poco margen', () => {
+    const result = calculateInActivityDifficulty({
+      previousSession: recentSearchSession({
+        dificultad: 2,
+        metadata: {
+          reason: 'objeto_encontrado',
+          ayudasUsadas: 1,
+          tiempoRestanteMs: 2500,
+        },
+      }),
+      minigame: objetoPerdido,
+    });
+
+    expect(result.dificultad).toBe(2);
+    expect(result.decision).toBe('mantener');
+    expect(result.metricas.alcance).toBe('actividad');
+  });
+});

@@ -10,8 +10,9 @@ describe('Mercado Inteligente - contrato de configuracion', () => {
     Object.entries(MERCADO_INTELIGENTE_DIFFICULTY_PRESETS).forEach(
       ([dificultad, preset]) => {
         expect(buildMercadoInteligenteGameConfig(Number(dificultad))).toEqual({
-          dificultad: Number(dificultad),
           ...preset,
+          dificultad: Number(dificultad),
+          semilla_ronda: 0,
         });
       }
     );
@@ -31,19 +32,28 @@ describe('Mercado Inteligente - contrato de configuracion', () => {
       cantidad_objetivos: 3,
       modo_objetivo: 'categoria_objetivo',
       ayudas_disponibles: 0,
+      semilla_ronda: 0,
     });
-    expect(MERCADO_INTELIGENTE_DIFFICULTY_PRESETS[3].presupuesto_monedas).toBe(12);
+    expect(MERCADO_INTELIGENTE_DIFFICULTY_PRESETS[3].presupuesto_monedas).toBe(18);
+  });
+
+  it('inyecta semilla de ronda para variar rutas repetidas', () => {
+    expect(buildMercadoInteligenteGameConfig(2, { semilla_ronda: 23 })).toMatchObject({
+      dificultad: 2,
+      semilla_ronda: 23,
+    });
   });
 
   it('mantiene la identidad oficial y usa el preset mas exigente como respaldo', () => {
     expect(MERCADO_INTELIGENTE_SLUG).toBe('mercado-inteligente');
     expect(buildMercadoInteligenteGameConfig(99)).toMatchObject({
       dificultad: 4,
-      presupuesto_monedas: 14,
+      presupuesto_monedas: 24,
       cantidad_productos_visibles: 6,
       cantidad_objetivos: 3,
       modo_objetivo: 'presupuesto_exacto',
       ayudas_disponibles: 0,
+      semilla_ronda: 0,
     });
   });
 });
