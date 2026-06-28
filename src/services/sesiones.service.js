@@ -9,6 +9,7 @@ import {
 } from './dificultadAdaptativa.service.js';
 import {
   avanzarParticipacionSesionClase,
+  cerrarSesionClaseSiSinJugadoresActivos,
   cerrarSesionClaseSiTermino,
   ESTADOS_PARTICIPANTE_SESION,
   esEstadoParticipanteTerminal,
@@ -647,6 +648,13 @@ const finalizarSesionInterna = async (
         sesionExistente.sesion_clase_id,
         executor
       );
+
+      if (!sesion_clase_cerrada && progreso_ruta?.haySiguientePaso !== true) {
+        sesion_clase_cerrada = await cerrarSesionClaseSiSinJugadoresActivos(
+          sesionExistente.sesion_clase_id,
+          executor
+        );
+      }
     }
   }
 

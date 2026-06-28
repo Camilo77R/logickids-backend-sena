@@ -54,6 +54,23 @@ const GROUP_FIELDS = [
   `),
   db.raw(`
     (
+      SELECT sc.abierta_en
+      FROM sesiones_clase sc
+      WHERE sc.grupo_id = grupos.id_grupo
+        AND sc.estado = 'activa'
+      ORDER BY sc.abierta_en DESC
+      LIMIT 1
+    ) as sesion_abierta_en
+  `),
+  db.raw(`
+    (
+      SELECT MAX(sc.abierta_en)
+      FROM sesiones_clase sc
+      WHERE sc.grupo_id = grupos.id_grupo
+    ) as ultima_sesion_abierta_en
+  `),
+  db.raw(`
+    (
       SELECT sc.modo
       FROM sesiones_clase sc
       WHERE sc.grupo_id = grupos.id_grupo

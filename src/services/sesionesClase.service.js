@@ -45,7 +45,7 @@ const CAMPOS_BASE_SESION_CLASE = [
 ];
 
 const MAX_PASOS_POR_SESION = 25;
-const DEFAULT_NIVELES_SINGLE = 3;
+const DEFAULT_NIVELES_SINGLE = 1;
 const MAX_NIVELES_POR_BLOQUE = 10;
 
 const normalizarConfiguracionBase = (configuracionBase) => {
@@ -432,6 +432,57 @@ export const cerrarSesionClaseSiTermino = async (sesionClaseId, executor = db) =
       estado: ESTADOS_SESION_CLASE.cerrada,
       cerrada_en: executor.fn.now(),
       cierre_motivo: 'finalizada',
+      actualizada_en: executor.fn.now(),
+    })
+    .returning(CAMPOS_BASE_SESION_CLASE);
+
+  return Boolean(sesionActualizada);
+};
+
+/**
+ * Cierra una actividad cuando ya no quedan partidas activas.
+ *
+ * Solo debe invocarse después de que un participante finalice o abandone su
+ * último paso. Los alumnos inscritos que nunca llegaron a conectarse no deben
+ * mantener la actividad abierta indefinidamente.
+ */
+export const cerrarSesionClaseSiSinJugadoresActivos = async (
+  sesionClaseId,
+  executor = db
+) => {
+  const jugadorActivo = await executor('sesiones_juego as sesion')
+    .join('estados_sesion as estado', 'estado.id_estado_sesion', 'sesion.estado_id')
+    .where({
+      'sesion.sesion_clase_id': sesionClaseId,
+      'estado.nombre': 'activo',
+    })
+    .select('sesion.id_sesion_juego')
+    .first();
+
+  if (jugadorActivo) {
+    return false;
+  }
+
+  await executor('sesion_clase_participantes')
+    .where({ sesion_clase_id: sesionClaseId })
+    .whereIn('estado', [
+      ESTADOS_PARTICIPANTE_SESION.pendiente,
+      ESTADOS_PARTICIPANTE_SESION.enProgreso,
+    ])
+    .update({
+      estado: ESTADOS_PARTICIPANTE_SESION.cerrado,
+      finalizada_en: executor.fn.now(),
+    });
+
+  const [sesionActualizada] = await executor('sesiones_clase')
+    .where({
+      id_sesion_clase: sesionClaseId,
+      estado: ESTADOS_SESION_CLASE.activa,
+    })
+    .update({
+      estado: ESTADOS_SESION_CLASE.cerrada,
+      cerrada_en: executor.fn.now(),
+      cierre_motivo: 'sin_jugadores_activos',
       actualizada_en: executor.fn.now(),
     })
     .returning(CAMPOS_BASE_SESION_CLASE);

@@ -10,6 +10,7 @@ import {
   withActiveGroupHistory,
 } from './access.service.js';
 import {
+  cerrarSesionClaseSiSinJugadoresActivos,
   cerrarSesionClaseSiTermino,
   ESTADOS_PARTICIPANTE_SESION,
   obtenerResumenSesionActivaParaEstudiante,
@@ -186,7 +187,10 @@ const closeClassStateForStudent = async (id_estudiante, executor = db) => {
   }
 
   for (const sesionClaseId of sesionesClaseTocadas) {
-    await cerrarSesionClaseSiTermino(sesionClaseId, executor);
+    const cerrada = await cerrarSesionClaseSiTermino(sesionClaseId, executor);
+    if (!cerrada) {
+      await cerrarSesionClaseSiSinJugadoresActivos(sesionClaseId, executor);
+    }
   }
 };
 
@@ -283,12 +287,25 @@ export const loginEstudiante = async (
   return loginResult;
 };
 
-export const logoutEstudiante = async (deviceSessionId) => ({
-  revoked: deviceSessionId
-    ? await revokeStudentDeviceSession(deviceSessionId)
-    : false,
-  legacy: !deviceSessionId,
-});
+export const logoutEstudiante = async (deviceSessionId) => {
+  if (!deviceSessionId) {
+    return { revoked: false, legacy: true };
+  }
+
+  return db.transaction(async (trx) => {
+    const deviceSession = await trx('student_device_sessions')
+      .where({ id_student_device_session: deviceSessionId })
+      .select('estudiante_id')
+      .first();
+
+    const revoked = await revokeStudentDeviceSession(deviceSessionId, 'logout', trx);
+    if (revoked && deviceSession?.estudiante_id) {
+      await closeClassStateForStudent(deviceSession.estudiante_id, trx);
+    }
+
+    return { revoked, legacy: false };
+  });
+};
 
 export const obtenerSesionDispositivoActiva = async (id_estudiante, user) =>
   db.transaction(async (trx) => {
