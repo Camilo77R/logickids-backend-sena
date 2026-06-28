@@ -23,6 +23,11 @@ export const iniciarSesionSchema = z.object({
     .min(1, 'El nivel mínimo es 1')
     .max(10, 'El nivel máximo es 10')
     .optional(),
+  modo_dificultad: z
+    .enum(['adaptativo', 'manual'], {
+      invalid_type_error: 'El modo de dificultad no es valido',
+    })
+    .optional(),
 });
 
 /** POST /api/sesiones/:id/eventos */

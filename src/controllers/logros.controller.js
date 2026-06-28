@@ -40,6 +40,13 @@ export const misLogros = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+export const resumen = async (req, res, next) => {
+  try {
+    const data = await svc.resumenEstudiante(req.estudiante.id);
+    ok(res, data, 'Resumen de logros obtenido correctamente');
+  } catch (e) { next(e); }
+};
+
 export const listar = async (req, res, next) => {
   try {
     const data = await svc.listar(Number(req.params.id), req.user);
@@ -54,7 +61,15 @@ export const desbloquear = async (req, res, next) => {
       throw new AppError('No puedes desbloquear logros para otro estudiante', 403);
     }
 
-    const data = await svc.desbloquear(req.estudiante.id, req.body.clave_logro);
+    const data = await svc.desbloquearSiDisponible(req.estudiante.id, req.body.clave_logro);
+    if (!data) {
+      return ok(
+        res,
+        { clave_logro: req.body.clave_logro, omitido: true },
+        'El logro no esta activo en el catalogo y fue omitido sin afectar la partida'
+      );
+    }
+
     created(res, data, 'Logro desbloqueado correctamente');
   } catch (e) { next(e); }
 };
