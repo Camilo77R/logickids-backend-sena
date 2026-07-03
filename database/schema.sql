@@ -223,9 +223,14 @@ CREATE TABLE IF NOT EXISTS public.recomendaciones
     modelo_ia_id integer,
     mensaje text COLLATE pg_catalog."default" NOT NULL,
     precision_momento numeric(5, 2),
+    origen_generacion character varying(20) NOT NULL DEFAULT 'legacy',
+    version_reglas character varying(30),
+    input_snapshot_json jsonb,
     generado_en timestamp with time zone NOT NULL DEFAULT now(),
     activo boolean NOT NULL DEFAULT true,
-    CONSTRAINT recomendaciones_pkey PRIMARY KEY (id_recomendacion)
+    CONSTRAINT recomendaciones_pkey PRIMARY KEY (id_recomendacion),
+    CONSTRAINT ck_recomendaciones_origen CHECK (origen_generacion IN ('legacy', 'plantilla', 'dataset', 'gemini', 'fallback')),
+    CONSTRAINT ck_recomendaciones_destino CHECK ((estudiante_id IS NULL) <> (grupo_id IS NULL))
 );
 
 CREATE TABLE IF NOT EXISTS public.roles

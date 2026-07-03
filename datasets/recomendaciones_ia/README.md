@@ -31,6 +31,18 @@ Desde la raíz del proyecto:
 npm run dataset:export:recomendaciones
 ```
 
+La base de datos es la fuente oficial. Los CSV se regeneran desde PostgreSQL y
+no deben usarse como almacenamiento operativo del módulo.
+
+Cada recomendación nueva exporta también:
+
+- `origen_generacion`: `plantilla`, `gemini`, `fallback` o legado
+- `version_reglas`: versión del motor determinista
+- `input_snapshot_json`: métricas y decisión utilizadas en ese momento
+
+El exportador excluye las recomendaciones masivas creadas por `seed_demo.sql`.
+Esos registros permanecen en PostgreSQL, pero no contaminan el dataset.
+
 Salida por defecto:
 
 ```txt

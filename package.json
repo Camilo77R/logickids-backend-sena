@@ -10,6 +10,8 @@
     "provision:codigo-estelar": "node scripts/provision-codigo-estelar-demo.mjs",
     "provision:codigo-estelar:6": "node scripts/provision-codigo-estelar-demo.mjs --students=6",
     "dataset:export:recomendaciones": "node scripts/export-recommendation-dataset.mjs",
+    "db:audit:recomendaciones": "node scripts/audit-recommendation-schema.mjs",
+    "smoke:recomendaciones": "node scripts/smoke-recommendation-engine.mjs",
     "test": "vitest run",
     "test:cleanup:institutions": "node scripts/cleanup-test-institutions.mjs",
     "test:watch": "vitest"

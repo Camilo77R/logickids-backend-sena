@@ -18,6 +18,19 @@ const getArgValue = (flag) => {
 
 const outputDir = path.resolve(getArgValue('--out') || DEFAULT_OUTPUT_DIR);
 
+const DEMO_RECOMMENDATION_MESSAGES = new Set([
+  'El estudiante muestra un progreso notable en lógica. Se recomienda incrementar la dificultad de los ejercicios para mantener el desafío cognitivo.',
+  'Se detectaron patrones de error recurrentes en secuencias. Reforzar ejercicios de memoria visual con imágenes y repetición espaciada.',
+  'Excelente tiempo de reacción. El estudiante está listo para niveles avanzados de razonamiento matemático.',
+  'La precisión del 70% sugiere dificultades con la atención sostenida. Recomendamos sesiones más cortas y con mayor frecuencia semanal.',
+  'El combo máximo alcanzado indica buena concentración. Se sugiere introducir variantes de juego para diversificar la estimulación cognitiva.',
+]);
+
+const isDemoRecommendation = (row) =>
+  row.estudiante_id != null &&
+  row.grupo_id_recomendacion != null &&
+  DEMO_RECOMMENDATION_MESSAGES.has(String(row.mensaje_objetivo ?? '').trim());
+
 const normalizeValue = (value) => {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) return value.toISOString();
@@ -107,6 +120,9 @@ const fetchRecommendationRows = async () =>
       'r.precision_momento',
       'ns.nombre as severidad',
       'mi.nombre as modelo_ia',
+      'r.origen_generacion',
+      'r.version_reglas',
+      'r.input_snapshot_json',
       'r.mensaje as mensaje_objetivo',
       'r.generado_en',
       'r.activo'
@@ -132,6 +148,9 @@ const buildRecommendationExamplesDataset = (rows) =>
     precision_momento: row.precision_momento,
     severidad: row.severidad,
     modelo_ia: row.modelo_ia,
+    origen_generacion: row.origen_generacion,
+    version_reglas: row.version_reglas,
+    input_snapshot_json: row.input_snapshot_json,
     mensaje_objetivo: row.mensaje_objetivo,
     generado_en: row.generado_en,
     activo: row.activo,
@@ -149,6 +168,9 @@ const buildRecommendationHistoryDataset = (rows) =>
     precision_momento: row.precision_momento,
     severidad: row.severidad,
     modelo_ia: row.modelo_ia,
+    origen_generacion: row.origen_generacion,
+    version_reglas: row.version_reglas,
+    input_snapshot_json: row.input_snapshot_json,
     mensaje_objetivo: row.mensaje_objetivo,
     generado_en: row.generado_en,
     activo: row.activo,
@@ -185,6 +207,9 @@ const recommendationHeaders = [
   'precision_momento',
   'severidad',
   'modelo_ia',
+  'origen_generacion',
+  'version_reglas',
+  'input_snapshot_json',
   'mensaje_objetivo',
   'generado_en',
   'activo',
@@ -201,6 +226,9 @@ const recommendationHistoryHeaders = [
   'precision_momento',
   'severidad',
   'modelo_ia',
+  'origen_generacion',
+  'version_reglas',
+  'input_snapshot_json',
   'mensaje_objetivo',
   'generado_en',
   'activo',
@@ -215,10 +243,14 @@ const main = async () => {
       fetchRecommendationRows(),
     ]);
 
+    const cleanRecommendationRows = recommendationRows.filter(
+      (row) => !isDemoRecommendation(row)
+    );
+    const excludedDemoRows = recommendationRows.length - cleanRecommendationRows.length;
     const datasetFeatures = buildStudentSkillDataset(studentSkillRows);
-    const datasetLabels = buildRecommendationExamplesDataset(recommendationRows);
+    const datasetLabels = buildRecommendationExamplesDataset(cleanRecommendationRows);
     const datasetHistory = buildRecommendationHistoryDataset(
-      recommendationRows.filter((row) => row.estudiante_id)
+      cleanRecommendationRows.filter((row) => row.estudiante_id)
     );
 
     const featuresPath = path.join(outputDir, 'student_skill_observations.csv');
@@ -235,6 +267,7 @@ const main = async () => {
     console.log(`- Observaciones por habilidad: ${datasetFeatures.length} filas`);
     console.log(`- Ejemplos de recomendaciones: ${datasetLabels.length} filas`);
     console.log(`- Historial de recomendaciones: ${datasetHistory.length} filas`);
+    console.log(`- Recomendaciones demo excluidas: ${excludedDemoRows} filas`);
   } finally {
     await db.destroy();
   }

@@ -1,14 +1,19 @@
 import { db } from '../config/db.js';
-import { env } from '../config/env.js';
 import { AppError } from '../middlewares/errorHandler.js';
+import {
+  buildGroupRecommendationV1,
+  buildStudentRecommendationV1,
+  RECOMMENDATION_RULES_VERSION,
+} from '../domain/recomendaciones/recommendationEngineV1.js';
+import { buildTemplateRecommendation } from '../domain/recomendaciones/recommendationTemplates.js';
 import {
   assertGroupBelongsToUser,
   assertStudentBelongsToUser,
 } from './access.service.js';
-
-const DEFAULT_MODEL_NAME = 'gemini-2.5-flash';
-
-const getGeminiModelName = () => env.GEMINI_MODEL_NAME || DEFAULT_MODEL_NAME;
+import {
+  generateRecommendationText,
+  getGeminiModelName,
+} from './recommendationText.service.js';
 
 const formatNumber = (value, fallback = 'N/A') => {
   if (value === null || value === undefined || value === '') return fallback;
@@ -23,9 +28,9 @@ const formatReaction = (value) =>
 
 const getPrecisionLabel = (precision) => {
   const value = Number(precision);
-  if (value < 40) return 'critico';
-  if (value < 65) return 'en refuerzo';
-  if (value < 80) return 'en consolidacion';
+  if (value < 50) return 'critico';
+  if (value < 70) return 'en refuerzo';
+  if (value < 85) return 'en consolidacion';
   return 'fortaleza';
 };
 
@@ -109,9 +114,9 @@ No inventes datos. Maximo 190 palabras.`;
 const resolveSeverityId = async (precision) => {
   let severityName = 'baja';
 
-  if (precision < 40) {
+  if (precision < 50) {
     severityName = 'alta';
-  } else if (precision < 65) {
+  } else if (precision < 70) {
     severityName = 'media';
   }
 
@@ -160,6 +165,8 @@ const listRecommendationFields = [
   'recomendaciones.precision_momento',
   'recomendaciones.generado_en',
   'recomendaciones.activo',
+  'recomendaciones.origen_generacion',
+  'recomendaciones.version_reglas',
   'niveles_severidad.nombre as severidad',
   'habilidades.nombre as habilidad',
   'modelos_ia.nombre as modelo_ia',
@@ -188,49 +195,6 @@ Acciones sugeridas: Divide el grupo en parejas, inicia con retos guiados de ${we
 Seguimiento: En la proxima sesion compara si la precision promedio sube a por lo menos ${nextGoal}% y si disminuye la diferencia entre el estudiante con menor y mayor precision.`;
 };
 
-const callGemini = async (prompt, fallback) => {
-  if (!env.GEMINI_API_KEY) {
-    return { message: fallback, source: 'fallback' };
-  }
-
-  const modelName = getGeminiModelName();
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Recomendaciones IA] Gemini respondio con error', {
-        status: response.status,
-        modelName,
-        body: errorText,
-      });
-      return { message: fallback, source: 'fallback' };
-    }
-
-    const json = await response.json();
-    const message = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    return message
-      ? { message, source: 'gemini' }
-      : { message: fallback, source: 'fallback' };
-  } catch (error) {
-    console.error('[Recomendaciones IA] No se pudo contactar Gemini', {
-      modelName,
-      message: error.message,
-    });
-    return { message: fallback, source: 'fallback' };
-  }
-};
-
 const fetchStudentStats = (estudiante_id) =>
   db('estadisticas_habilidad')
     .join('habilidades', 'habilidades.id_habilidad', 'estadisticas_habilidad.habilidad_id')
@@ -244,7 +208,8 @@ const fetchStudentStats = (estudiante_id) =>
       'estadisticas_habilidad.errores',
       'estadisticas_habilidad.actualizado_en',
       'habilidades.nombre as habilidad'
-    );
+    )
+    .orderBy('estadisticas_habilidad.habilidad_id');
 
 const fetchGroupStats = (grupo_id) =>
   db('estadisticas_habilidad')
@@ -262,7 +227,7 @@ const fetchGroupStats = (grupo_id) =>
     .select(
       'habilidades.id_habilidad',
       'habilidades.nombre as habilidad',
-      db.raw('ROUND(AVG(estadisticas_habilidad.precision_pct), 2) as precision_promedio'),
+      db.raw('ROUND(SUM(estadisticas_habilidad.aciertos) * 100.0 / NULLIF(SUM(estadisticas_habilidad.total_intentos), 0), 2) as precision_promedio'),
       db.raw('ROUND(AVG(estadisticas_habilidad.promedio_reaccion_ms)) as reaccion_promedio'),
       db.raw('COUNT(DISTINCT estadisticas_habilidad.estudiante_id) as estudiantes_evaluados'),
       db.raw('SUM(estadisticas_habilidad.total_intentos) as intentos_totales'),
@@ -271,7 +236,28 @@ const fetchGroupStats = (grupo_id) =>
       db.raw('ROUND(MIN(estadisticas_habilidad.precision_pct), 2) as precision_minima'),
       db.raw('ROUND(MAX(estadisticas_habilidad.precision_pct), 2) as precision_maxima')
     )
-    .groupBy('habilidades.id_habilidad', 'habilidades.nombre');
+    .groupBy('habilidades.id_habilidad', 'habilidades.nombre')
+    .orderBy('habilidades.id_habilidad');
+
+const fetchRecommendationGames = () =>
+  db('minijuegos')
+    .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
+    .where({
+      'minijuegos.activo': true,
+      'minijuegos.visible_en_catalogo': true,
+    })
+    .select(
+      'minijuegos.id_minijuego',
+      'minijuegos.slug',
+      'minijuegos.titulo',
+      'minijuegos.habilidad_id',
+      'minijuegos.dificultad_maxima',
+      'minijuegos.orden_catalogo',
+      'minijuegos.activo',
+      'minijuegos.visible_en_catalogo',
+      'habilidades.nombre as habilidad'
+    )
+    .orderBy('minijuegos.orden_catalogo');
 
 const fetchStudentRecentSessions = (estudiante_id) =>
   db('sesiones_juego')
@@ -280,6 +266,8 @@ const fetchStudentRecentSessions = (estudiante_id) =>
     .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
     .where('sesiones_juego.estudiante_id', estudiante_id)
     .select(
+      'minijuegos.id_minijuego',
+      'minijuegos.slug',
       'sesiones_juego.dificultad',
       'sesiones_juego.puntaje',
       'sesiones_juego.aciertos',
@@ -333,37 +321,82 @@ const loadRecommendationById = (id_recomendacion) =>
     .select(listRecommendationFields)
     .first();
 
+const resolveGeneration = ({ template, prompt, fallback }) =>
+  template
+    ? Promise.resolve({ message: template, source: 'template' })
+    : generateRecommendationText({ prompt, fallback });
+
+const mapGenerationOrigin = (source) => {
+  if (source === 'template') return 'plantilla';
+  if (source === 'gemini') return 'gemini';
+  return 'fallback';
+};
+
+const assertSufficientEvidence = (decision, subjectLabel) => {
+  if (decision.status === 'ready') return;
+
+  throw new AppError(
+    `${subjectLabel} aun no tiene evidencia suficiente para generar una recomendacion confiable`,
+    400,
+    { evidence: decision.evidence }
+  );
+};
+
 export const generarParaEstudiante = async (estudiante_id, user) => {
   const student = await assertStudentBelongsToUser(estudiante_id, user);
-  const [stats, history, recentSessions] = await Promise.all([
+  const [stats, history, recentSessions, games] = await Promise.all([
     fetchStudentStats(estudiante_id),
     fetchStudentRecommendationHistory(estudiante_id),
     fetchStudentRecentSessions(estudiante_id),
+    fetchRecommendationGames(),
   ]);
 
   if (!stats.length) {
     throw new AppError('El estudiante no tiene estadisticas aun', 400);
   }
 
-  const weakestSkill = pickWeakestSkill(stats, 'precision_pct');
-  const [severidad_id, modelo_ia_id, generation] = await Promise.all([
-    resolveSeverityId(Number(weakestSkill.precision_pct)),
-    resolveDefaultModelId(),
-    callGemini(
-      buildStudentPrompt(student.nombre, stats, history, recentSessions),
-      buildStudentFallbackRecommendation({ nombre: student.nombre, stats, recentSessions })
-    ),
+  const decision = buildStudentRecommendationV1({
+    studentId: estudiante_id,
+    studentAge: student.edad,
+    stats,
+    games,
+    recentSessions,
+  });
+  assertSufficientEvidence(decision, 'El estudiante');
+
+  const template = buildTemplateRecommendation({
+    subjectType: 'student',
+    subjectName: student.nombre,
+    decision,
+  });
+  const [severidad_id, generation] = await Promise.all([
+    resolveSeverityId(decision.skillTarget.precision),
+    resolveGeneration({
+      template,
+      prompt: buildStudentPrompt(student.nombre, stats, history, recentSessions),
+      fallback: buildStudentFallbackRecommendation({ nombre: student.nombre, stats, recentSessions }),
+    }),
   ]);
+  const modelo_ia_id = generation.source === 'gemini' ? await resolveDefaultModelId() : null;
+  const snapshot = {
+    subjectType: 'student',
+    subjectId: estudiante_id,
+    stats,
+    decision,
+  };
 
   const [recommendation] = await db('recomendaciones')
     .insert({
       estudiante_id,
       grupo_id: null,
-      habilidad_id: weakestSkill.habilidad_id,
+      habilidad_id: decision.skillTarget.id,
       severidad_id,
       modelo_ia_id: generation.source === 'gemini' ? modelo_ia_id : null,
       mensaje: generation.message,
-      precision_momento: weakestSkill.precision_pct,
+      precision_momento: decision.skillTarget.precision,
+      origen_generacion: mapGenerationOrigin(generation.source),
+      version_reglas: RECOMMENDATION_RULES_VERSION,
+      input_snapshot_json: snapshot,
       activo: true,
     })
     .returning('id_recomendacion');
@@ -373,34 +406,52 @@ export const generarParaEstudiante = async (estudiante_id, user) => {
 
 export const generarParaGrupo = async (grupo_id, user) => {
   const group = await assertGroupBelongsToUser(grupo_id, user);
-  const [stats, history] = await Promise.all([
+  const [stats, history, games] = await Promise.all([
     fetchGroupStats(grupo_id),
     fetchGroupRecommendationHistory(grupo_id),
+    fetchRecommendationGames(),
   ]);
 
   if (!stats.length) {
     throw new AppError('El grupo no tiene estadisticas aun', 400);
   }
 
-  const weakestSkill = pickWeakestSkill(stats, 'precision_promedio');
-  const [severidad_id, modelo_ia_id, generation] = await Promise.all([
-    resolveSeverityId(Number(weakestSkill.precision_promedio)),
-    resolveDefaultModelId(),
-    callGemini(
-      buildGroupPrompt(group.nombre, stats, history),
-      buildGroupFallbackRecommendation({ grupo: group.nombre, stats })
-    ),
+  const decision = buildGroupRecommendationV1({ groupId: grupo_id, stats, games });
+  assertSufficientEvidence(decision, 'El grupo');
+
+  const template = buildTemplateRecommendation({
+    subjectType: 'group',
+    subjectName: group.nombre,
+    decision,
+  });
+  const [severidad_id, generation] = await Promise.all([
+    resolveSeverityId(decision.skillTarget.precision),
+    resolveGeneration({
+      template,
+      prompt: buildGroupPrompt(group.nombre, stats, history),
+      fallback: buildGroupFallbackRecommendation({ grupo: group.nombre, stats }),
+    }),
   ]);
+  const modelo_ia_id = generation.source === 'gemini' ? await resolveDefaultModelId() : null;
+  const snapshot = {
+    subjectType: 'group',
+    subjectId: grupo_id,
+    stats,
+    decision,
+  };
 
   const [recommendation] = await db('recomendaciones')
     .insert({
       estudiante_id: null,
       grupo_id,
-      habilidad_id: weakestSkill.id_habilidad,
+      habilidad_id: decision.skillTarget.id,
       severidad_id,
       modelo_ia_id: generation.source === 'gemini' ? modelo_ia_id : null,
       mensaje: generation.message,
-      precision_momento: weakestSkill.precision_promedio,
+      precision_momento: decision.skillTarget.precision,
+      origen_generacion: mapGenerationOrigin(generation.source),
+      version_reglas: RECOMMENDATION_RULES_VERSION,
+      input_snapshot_json: snapshot,
       activo: true,
     })
     .returning('id_recomendacion');

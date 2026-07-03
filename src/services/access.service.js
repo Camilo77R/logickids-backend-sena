@@ -147,6 +147,7 @@ export const assertStudentBelongsToUser = async (studentId, user, trx = db) => {
   query = query.select(
     'estudiantes.id_estudiante',
     'estudiantes.nombre',
+    'estudiantes.edad',
     'egh.grupo_id',
     'grupos.tutor_asignado_id',
     'grupos.institucion_id'

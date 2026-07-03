@@ -977,6 +977,13 @@ export const registrarEvento = async (
     }
 
     habilidad_id = habilidadRecord.id_habilidad;
+  } else {
+    const minijuego = await trx('minijuegos')
+      .where({ id_minijuego: sesion.minijuego_id })
+      .select('habilidad_id')
+      .first();
+
+    habilidad_id = minijuego?.habilidad_id ?? null;
   }
 
   if (sesion.sesion_clase_id != null) {
