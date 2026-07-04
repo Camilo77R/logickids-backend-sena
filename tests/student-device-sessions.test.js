@@ -238,4 +238,74 @@ describe('Contrato endurecido de sesiones de dispositivo estudiantil', () => {
 
     expect(activeRows).toEqual([{ estudiante_id: firstStudent.id }]);
   });
+
+  it('no deja inutilizable un QR valido despues de varios intentos invalidos en el mismo dispositivo', async () => {
+    const fixture = await provisionStudentDeviceSessionFixture();
+    const student = fixture.students[0];
+    const installationId = randomUUID();
+
+    for (let attempt = 0; attempt < env.STUDENT_LOGIN_MAX_ATTEMPTS + 1; attempt += 1) {
+      await loginStudent({
+        qrToken: `QR-INVALIDO-${attempt}`,
+        installationId,
+      });
+    }
+
+    const validLogin = await loginStudent({
+      qrToken: student.qrToken,
+      installationId,
+    });
+
+    expect(validLogin.status).toBe(200);
+    expect(validLogin.body.data.estudiante.id).toBe(student.id);
+  });
+
+  it('no bloquea a otro dispositivo del mismo colegio por compartir IP', async () => {
+    const fixture = await provisionStudentDeviceSessionFixture();
+    const student = fixture.students[0];
+    const noisyInstallationId = randomUUID();
+
+    for (let attempt = 0; attempt < env.STUDENT_LOGIN_MAX_ATTEMPTS + 1; attempt += 1) {
+      await loginStudent({
+        qrToken: `QR-NOISE-${attempt}`,
+        installationId: noisyInstallationId,
+      });
+    }
+
+    const cleanInstallationLogin = await loginStudent({
+      qrToken: student.qrToken,
+      installationId: randomUUID(),
+    });
+
+    expect(cleanInstallationLogin.status).toBe(200);
+    expect(cleanInstallationLogin.body.data.estudiante.id).toBe(student.id);
+  });
+
+  it('permite reemplazar la sesion activa del mismo dispositivo para entrar con otro QR', async () => {
+    const fixture = await provisionStudentDeviceSessionFixture({ studentCount: 2 });
+    const [firstStudent, secondStudent] = fixture.students;
+    const installationId = randomUUID();
+
+    const firstLogin = await loginStudent({
+      qrToken: firstStudent.qrToken,
+      installationId,
+    });
+
+    const replacementLogin = await loginStudent({
+      qrToken: secondStudent.qrToken,
+      installationId,
+      deviceConflictStrategy: 'replace_existing_device_session',
+    });
+
+    expect(firstLogin.status).toBe(200);
+    expect(replacementLogin.status).toBe(200);
+    expect(replacementLogin.body.data.estudiante.id).toBe(secondStudent.id);
+
+    const firstProfileAfterReplacement = await request(app)
+      .get('/api/estudiantes/mi-perfil')
+      .set(authHeader(firstLogin.body.data.token));
+
+    expect(firstProfileAfterReplacement.status).toBe(401);
+    expect(firstProfileAfterReplacement.body.code).toBe('SESSION_REVOKED');
+  });
 });

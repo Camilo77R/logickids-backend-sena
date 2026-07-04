@@ -7,6 +7,9 @@ const MINUTE_IN_MS = 60 * 1000;
 
 export const STUDENT_SESSION_TTL_SECONDS =
   env.STUDENT_DEVICE_SESSION_TTL_MINUTES * 60;
+export const STUDENT_DEVICE_CONFLICT_STRATEGIES = Object.freeze({
+  replaceExistingDeviceSession: 'replace_existing_device_session',
+});
 
 const STUDENT_INACTIVITY_MS =
   env.STUDENT_DEVICE_INACTIVITY_MINUTES * MINUTE_IN_MS;
@@ -52,6 +55,14 @@ const revokeSession = (sessionId, reason, executor) =>
 const findLiveSessionForUpdate = (estudianteId, executor) =>
   executor('student_device_sessions')
     .where({ estudiante_id: estudianteId })
+    .whereNull('revocada_en')
+    .orderBy('creada_en', 'desc')
+    .forUpdate()
+    .first();
+
+const findLiveSessionByInstallationForUpdate = (installationHash, executor) =>
+  executor('student_device_sessions')
+    .where({ installation_hash: installationHash })
     .whereNull('revocada_en')
     .orderBy('creada_en', 'desc')
     .forUpdate()
@@ -138,6 +149,18 @@ export const resolveActiveStudentDeviceSession = async (estudianteId, executor) 
   );
 };
 
+export const resolveActiveStudentDeviceSessionByInstallation = async (
+  installationId,
+  executor
+) => {
+  const now = new Date();
+  return expireStaleSession(
+    await findLiveSessionByInstallationForUpdate(hashInstallationId(installationId), executor),
+    now,
+    executor
+  );
+};
+
 export const validateStudentDeviceSession = async ({ sessionId, estudianteId }) => {
   const resolution = await db.transaction(async (trx) => {
     const session = await trx('student_device_sessions')
@@ -200,6 +223,15 @@ const hashRateLimitKey = (value) =>
     .update(value)
     .digest('hex');
 
+export const buildStudentLoginRateLimitKeys = ({ ip, installationId }) => {
+  const normalizedIp = String(ip ?? 'unknown');
+
+  return {
+    deviceKeyHash: hashRateLimitKey(`device|${normalizedIp}|${installationId}`),
+    ipKeyHash: hashRateLimitKey(`ip|${normalizedIp}`),
+  };
+};
+
 const recordRateLimitKey = async ({ keyHash, maxAttempts }) => {
   const result = await db.transaction(async (trx) => {
     await trx('student_login_rate_limits')
@@ -249,27 +281,28 @@ const recordRateLimitKey = async ({ keyHash, maxAttempts }) => {
 };
 
 export const recordStudentLoginAttempt = async ({ ip, installationId }) => {
-  const normalizedIp = String(ip ?? 'unknown');
-  const keys = [
-    {
-      keyHash: hashRateLimitKey(`device|${normalizedIp}|${installationId}`),
-      maxAttempts: env.STUDENT_LOGIN_MAX_ATTEMPTS,
-    },
-    {
-      keyHash: hashRateLimitKey(`ip|${normalizedIp}`),
-      maxAttempts: env.STUDENT_LOGIN_MAX_ATTEMPTS_PER_IP,
-    },
-  ];
+  const { deviceKeyHash, ipKeyHash } = buildStudentLoginRateLimitKeys({
+    ip,
+    installationId,
+  });
 
-  const recordedKeys = [];
-  for (const key of keys) {
-    recordedKeys.push(await recordRateLimitKey(key));
-  }
+  await recordRateLimitKey({
+    keyHash: deviceKeyHash,
+    maxAttempts: env.STUDENT_LOGIN_MAX_ATTEMPTS,
+  });
+
   return {
-    deviceKeyHash: recordedKeys[0],
-    ipKeyHash: recordedKeys[1],
+    deviceKeyHash,
+    ipKeyHash,
   };
 };
 
-export const clearStudentLoginRateLimit = ({ deviceKeyHash }) =>
-  db('student_login_rate_limits').where({ key_hash: deviceKeyHash }).del();
+export const clearStudentLoginRateLimit = ({ deviceKeyHash, ipKeyHash } = {}) => {
+  const keysToClear = [deviceKeyHash, ipKeyHash].filter(Boolean);
+
+  if (!keysToClear.length) {
+    return Promise.resolve(0);
+  }
+
+  return db('student_login_rate_limits').whereIn('key_hash', keysToClear).del();
+};
