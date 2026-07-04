@@ -18,12 +18,15 @@ import { finalizar } from './sesiones.service.js';
 import { randomCode } from '../utils/codes.js';
 import { publishStudentAccessChanged } from '../realtime/realtime.events.js';
 import {
+  buildStudentLoginRateLimitKeys,
   clearStudentLoginRateLimit,
   createOrReuseStudentDeviceSession,
   recordStudentLoginAttempt,
   resolveActiveStudentDeviceSession,
+  resolveActiveStudentDeviceSessionByInstallation,
   revokeAllStudentDeviceSessions,
   revokeStudentDeviceSession,
+  STUDENT_DEVICE_CONFLICT_STRATEGIES,
   STUDENT_SESSION_TTL_SECONDS,
 } from './student-device-session.service.js';
 
@@ -209,10 +212,10 @@ const generateUniqueQR = async () => {
  * Emite un JWT firmado con JWT_STUDENT_SECRET (diferente al de tutores).
  */
 export const loginEstudiante = async (
-  { qr_token, installation_id, app_version },
+  { qr_token, installation_id, app_version, device_conflict_strategy },
   { ip = 'unknown' } = {}
 ) => {
-  const rateLimitKeys = await recordStudentLoginAttempt({
+  const rateLimitKeys = buildStudentLoginRateLimitKeys({
     ip,
     installationId: installation_id,
   });
@@ -225,8 +228,14 @@ export const loginEstudiante = async (
       .first();
 
     if (!identity) {
+      await recordStudentLoginAttempt({
+        ip,
+        installationId: installation_id,
+      });
       throw new AppError('QR inválido', 404, { code: 'STUDENT_QR_INVALID' });
     }
+
+    await clearStudentLoginRateLimit(rateLimitKeys);
 
     const est = await buildBaseStudentRow(trx)
       .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
@@ -244,6 +253,56 @@ export const loginEstudiante = async (
     }
 
     const perfil = await enrichStudentWithActiveSession(est, trx);
+    const events = [];
+    const activeSessionOnInstallation =
+      await resolveActiveStudentDeviceSessionByInstallation(installation_id, trx);
+
+    if (
+      activeSessionOnInstallation &&
+      activeSessionOnInstallation.estudiante_id !== perfil.id
+    ) {
+      if (
+        device_conflict_strategy !==
+        STUDENT_DEVICE_CONFLICT_STRATEGIES.replaceExistingDeviceSession
+      ) {
+        throw new AppError('El dispositivo ya tiene una sesion infantil activa', 409, {
+          code: 'STUDENT_SESSION_ACTIVE',
+        });
+      }
+
+      const replacedStudent = await buildBaseStudentRow(trx)
+        .leftJoin('instituciones', 'instituciones.id_institucion', 'estudiantes.institucion_id')
+        .where('estudiantes.id_estudiante', activeSessionOnInstallation.estudiante_id)
+        .select('estudiantes.institucion_id')
+        .first();
+
+      await closeClassStateForStudent(activeSessionOnInstallation.estudiante_id, trx);
+      await revokeAllStudentDeviceSessions(
+        activeSessionOnInstallation.estudiante_id,
+        'device_replaced_local',
+        trx
+      );
+
+      await trx('student_device_session_audit').insert({
+        estudiante_id: activeSessionOnInstallation.estudiante_id,
+        institucion_id: perfil.institucion_id ?? null,
+        actor_usuario_id: null,
+        accion: 'tutor_recovery',
+        metadata: {
+          replaced_by_student_id: perfil.id,
+          strategy: device_conflict_strategy,
+          recovery_mode: 'same_device_handoff',
+        },
+      });
+
+      events.push({
+        institucionId: replacedStudent?.institucion_id ?? perfil.institucion_id ?? null,
+        studentId: activeSessionOnInstallation.estudiante_id,
+        grupoId: replacedStudent?.grupo_id ?? null,
+        reason: 'student_device_recovered',
+      });
+    }
+
     const { session, reused } = await createOrReuseStudentDeviceSession(
       {
         estudianteId: perfil.id,
@@ -268,27 +327,79 @@ export const loginEstudiante = async (
     );
 
     const { qr_token: _, ...estudiante } = perfil;
+    events.push({
+      institucionId: perfil.institucion_id ?? null,
+      studentId: perfil.id,
+      grupoId: perfil.grupo_id ?? null,
+      reason: reused ? 'student_device_session_reused' : 'student_device_session_started',
+    });
+
     return {
-      token,
-      estudiante,
-      expires_at: session.expira_en,
-      device_session: {
-        id: session.id_student_device_session,
-        reused,
+      response: {
+        token,
+        estudiante,
+        expires_at: session.expira_en,
+        device_session: {
+          id: session.id_student_device_session,
+          reused,
+        },
       },
+      events,
     };
   });
 
-  await clearStudentLoginRateLimit(rateLimitKeys);
-  return loginResult;
+  loginResult.events.forEach((event) => publishStudentAccessChanged(event));
+  return loginResult.response;
 };
 
-export const logoutEstudiante = async (deviceSessionId) => ({
-  revoked: deviceSessionId
-    ? await revokeStudentDeviceSession(deviceSessionId)
-    : false,
-  legacy: !deviceSessionId,
-});
+export const logoutEstudiante = async (deviceSessionId) => {
+  if (!deviceSessionId) {
+    return {
+      revoked: false,
+      legacy: true,
+    };
+  }
+
+  const result = await db.transaction(async (trx) => {
+    const activeSession = await trx('student_device_sessions as sds')
+      .join('estudiantes', 'estudiantes.id_estudiante', 'sds.estudiante_id')
+      .leftJoin('estudiante_grupo_historial as egh', function joinActiveMembership() {
+        this.on('egh.estudiante_id', 'estudiantes.id_estudiante')
+          .andOn('egh.activo', db.raw('TRUE'))
+          .andOnNull('egh.fecha_fin');
+      })
+      .where('sds.id_student_device_session', deviceSessionId)
+      .select(
+        'sds.estudiante_id',
+        'estudiantes.institucion_id',
+        'egh.grupo_id'
+      )
+      .first();
+
+    const revoked = await revokeStudentDeviceSession(deviceSessionId, 'logout', trx);
+
+    return {
+      revoked,
+      event: activeSession
+        ? {
+            institucionId: activeSession.institucion_id ?? null,
+            studentId: activeSession.estudiante_id,
+            grupoId: activeSession.grupo_id ?? null,
+            reason: 'student_device_session_ended',
+          }
+        : null,
+    };
+  });
+
+  if (result.revoked && result.event) {
+    publishStudentAccessChanged(result.event);
+  }
+
+  return {
+    revoked: result.revoked,
+    legacy: false,
+  };
+};
 
 export const obtenerSesionDispositivoActiva = async (id_estudiante, user) =>
   db.transaction(async (trx) => {

@@ -13,6 +13,9 @@ export const loginEstudianteSchema = z.object({
     .min(8, 'El identificador de instalación es demasiado corto')
     .max(128, 'El identificador de instalación es demasiado largo'),
   app_version: z.string().trim().max(50).optional().nullable(),
+  device_conflict_strategy: z
+    .literal('replace_existing_device_session')
+    .optional(),
 });
 
 export const recuperarSesionDispositivoSchema = z.object({

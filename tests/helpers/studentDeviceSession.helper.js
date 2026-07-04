@@ -18,13 +18,18 @@ const assertStatus = (response, expectedStatus, context) => {
 
 export const authHeader = (token) => ({ Authorization: `Bearer ${token}` });
 
-export const loginStudent = ({ qrToken, installationId = randomUUID() }) =>
+export const loginStudent = ({
+  qrToken,
+  installationId = randomUUID(),
+  deviceConflictStrategy,
+}) =>
   request(app)
     .post('/api/estudiantes/login')
     .send({
       qr_token: qrToken,
       installation_id: installationId,
       app_version: 'student-device-session-test',
+      device_conflict_strategy: deviceConflictStrategy,
     });
 
 const createInstitution = async (suffix) => {
