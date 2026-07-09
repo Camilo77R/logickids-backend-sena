@@ -1,0 +1,47 @@
+import { vi } from 'vitest';
+
+export function createMockQueryBuilder() {
+  return {
+    select: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    whereIn: vi.fn().mockReturnThis(),
+    whereNot: vi.fn().mockReturnThis(),
+    whereNull: vi.fn().mockReturnThis(),
+    whereNotNull: vi.fn().mockReturnThis(),
+    whereExists: vi.fn().mockReturnThis(),
+    whereNotExists: vi.fn().mockReturnThis(),
+    andWhere: vi.fn().mockReturnThis(),
+    orWhere: vi.fn().mockReturnThis(),
+    join: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    groupBy: vi.fn().mockReturnThis(),
+    having: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    offset: vi.fn().mockReturnThis(),
+    first: vi.fn().mockResolvedValue(null),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    del: vi.fn().mockResolvedValue(1),
+    increment: vi.fn().mockReturnThis(),
+    count: vi.fn().mockReturnThis(),
+    countDistinct: vi.fn().mockReturnThis(),
+    sum: vi.fn().mockReturnThis(),
+    raw: vi.fn((val) => ({ toQuery: () => val })),
+    from: vi.fn().mockReturnThis(),
+    as: vi.fn().mockReturnThis(),
+    transacting: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockReturnThis(),
+    clone: vi.fn().mockReturnThis(),
+    onConflict: vi.fn().mockReturnThis(),
+    ignore: vi.fn().mockReturnThis(),
+    forUpdate: vi.fn().mockReturnThis(),
+    toSQL: vi.fn().mockReturnValue({ sql: '', bindings: [] }),
+    then: vi.fn(function (resolve) {
+      return Promise.resolve(resolve ? resolve([]) : []);
+    }),
+    catch: vi.fn(),
+    finally: vi.fn(),
+  };
+}
