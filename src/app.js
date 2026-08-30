@@ -9,6 +9,7 @@ import { errorHandler } from "./middlewares/errorHandler.js";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger.js";
 import iaRoutes from './routes/ia.routes.js';
+import { isCatalogCacheReady, getCatalogCacheStats } from './services/catalog-cache.service.js';
 
 import authRoutes from "./routes/auth.routes.js";
 import gruposRoutes from "./routes/grupos.routes.js";
@@ -57,16 +58,21 @@ if (env.NODE_ENV !== "production") {
     );
 }
 
-app.get("/api/health", (_req, res) =>
+app.get("/api/health", (_req, res) => {
+    const catalogReady = isCatalogCacheReady();
     res.json({
         success: true,
         data: {
             status: "ok",
             version: "2.0.0",
             timestamp: new Date().toISOString(),
+            catalog_cache: {
+                ready: catalogReady,
+                ...(catalogReady ? getCatalogCacheStats() : {}),
+            },
         },
-    }),
-);
+    });
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/grupos", gruposRoutes);

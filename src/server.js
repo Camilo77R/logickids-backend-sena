@@ -3,10 +3,15 @@ import { env } from './config/env.js';
 import { checkDbConnection } from './config/db.js';
 import { createServer } from 'http';
 import { setupSockets } from './sockets/socket.manager.js';
+import { warmUpCatalogCache } from './services/catalog-cache.service.js';
 
 const start = async () => {
   await checkDbConnection();
-  
+
+  // Pre-load static catalog tables (estados_sesion, tipos_evento, habilidades)
+  // into memory so hot-path endpoints don't pay per-request DB round-trips.
+  await warmUpCatalogCache();
+
   // Crear servidor HTTP explícito para acoplar Socket.io
   const httpServer = createServer(app);
   

@@ -46,6 +46,11 @@ import {
   publishStudentAccessChanged,
 } from '../realtime/realtime.events.js';
 import { executeIdempotent } from './student-idempotency.service.js';
+import {
+  getEstadoSesionId,
+  getTipoEventoId,
+  getHabilidadId,
+} from './catalog-cache.service.js';
 
 /** Resuelve el ID de una tabla catálogo por su nombre usando la PK correcta */
 const resolveCatalogId = async (table, pkColumn, nombre, executor = db) => {
@@ -928,14 +933,22 @@ export const registrarEvento = async (
         executor: trx,
       },
       async () => {
-  const sesion = await trx('sesiones_juego')
-    .where({ id_sesion_juego: sesion_id, estudiante_id })
-    .forUpdate()
-    .first();
-  if (!sesion) throw new AppError('Sesión no encontrada', 404);
+  // Resolve catalog IDs from the in-memory cache and fetch the session
+  // concurrently — this cuts 3 sequential DB round-trips down to 1.
+  const [sesion, activo_id, tipo_evento_id, habilidad_id_cached] = await Promise.all([
+    trx('sesiones_juego')
+      .where({ id_sesion_juego: sesion_id, estudiante_id })
+      .forUpdate()
+      .first(),
+    getEstadoSesionId('activo'),
+    getTipoEventoId(tipo_evento),
+    habilidad ? getHabilidadId(habilidad) : Promise.resolve(null),
+  ]);
 
-  const activo_id = await resolveCatalogId('estados_sesion', 'id_estado_sesion', 'activo', trx);
+  if (!sesion) throw new AppError('Sesión no encontrada', 404);
   if (sesion.estado_id !== activo_id) throw new AppError('La sesión ya no está activa', 409);
+
+  let habilidad_id = habilidad_id_cached;
 
   if (sequence != null) {
     const existingSequence = await trx('eventos_sesion')
@@ -948,27 +961,6 @@ export const registrarEvento = async (
         code: 'IDEMPOTENCY_CONFLICT',
       });
     }
-  }
-
-  const tipo_evento_id = await resolveCatalogId(
-    'tipos_evento',
-    'id_tipo_evento',
-    tipo_evento,
-    trx
-  );
-
-  let habilidad_id = null;
-  if (habilidad) {
-    const habilidadRecord = await trx('habilidades')
-      .where({ nombre: habilidad })
-      .select('id_habilidad')
-      .first();
-
-    if (!habilidadRecord) {
-      throw new AppError(`La habilidad '${habilidad}' no existe`, 400);
-    }
-
-    habilidad_id = habilidadRecord.id_habilidad;
   }
 
   if (sesion.sesion_clase_id != null) {
@@ -1196,8 +1188,10 @@ export const historial = async (estudiante_id, user) => {
   return listarHistorialEstudiante(estudiante_id);
 };
 
-export const listarHistorialEstudiante = (estudiante_id) =>
-  db('sesiones_juego')
+export const listarHistorialEstudiante = async (estudiante_id) => {
+  // Fetch the session rows without the correlated subquery that previously
+  // ran a COUNT(*) for every single row (N+1 behaviour).
+  const sesiones = await db('sesiones_juego')
     .join('minijuegos', 'minijuegos.id_minijuego', 'sesiones_juego.minijuego_id')
     .join('habilidades', 'habilidades.id_habilidad', 'minijuegos.habilidad_id')
     .join('estados_sesion', 'estados_sesion.id_estado_sesion', 'sesiones_juego.estado_id')
@@ -1232,13 +1226,40 @@ export const listarHistorialEstudiante = (estudiante_id) =>
       'estados_sesion.nombre as estado',
       'minijuegos.titulo as minijuego',
       'minijuegos.slug',
-      'habilidades.nombre as habilidad',
-      db.raw(
-        '(SELECT COUNT(*) FROM sesion_clase_pasos pasos WHERE pasos.sesion_clase_id = sesiones_juego.sesion_clase_id) as sesion_total_pasos'
-      )
+      'habilidades.nombre as habilidad'
     )
     .orderBy('sesiones_juego.iniciada_en', 'desc')
     .limit(50);
+
+  if (sesiones.length === 0) return sesiones;
+
+  // Collect the distinct sesion_clase_ids that appear in this result set and
+  // fetch their step counts in a single aggregation query instead of one
+  // correlated subquery per row.
+  const sesionClaseIds = [
+    ...new Set(sesiones.map((s) => s.sesion_clase_id).filter((id) => id != null)),
+  ];
+
+  const stepCountMap = new Map();
+  if (sesionClaseIds.length > 0) {
+    const counts = await db('sesion_clase_pasos')
+      .whereIn('sesion_clase_id', sesionClaseIds)
+      .groupBy('sesion_clase_id')
+      .select('sesion_clase_id', db.raw('COUNT(*) as total_pasos'));
+
+    for (const row of counts) {
+      stepCountMap.set(row.sesion_clase_id, Number(row.total_pasos));
+    }
+  }
+
+  // Merge the count back into each session row.
+  return sesiones.map((s) => ({
+    ...s,
+    sesion_total_pasos: s.sesion_clase_id != null
+      ? (stepCountMap.get(s.sesion_clase_id) ?? 0)
+      : 0,
+  }));
+};
 
 /**
  * Detalle evento a evento de una sesión.
